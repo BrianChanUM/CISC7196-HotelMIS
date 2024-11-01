@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Basic Page Needs
+    ================================================== -->
+    <meta charset="utf-8">
+    <!--[if IE]><meta http-equiv="x-ua-compatible" content="IE=9" /><![endif]-->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CISC7196-HotelMIS-2023OCT18</title>
+    <meta name="description" content="Spirit8 is a Digital agency one page template built based on bootstrap framework. This template is design by Robert Berki and coded by Jenn Pereira. It is simple, mobile responsive, perfect for portfolio and agency websites. Get this for free exclusively at ThemeForces.com">
+    <meta name="keywords" content="bootstrap theme, portfolio template, digital agency, onepage, mobile responsive, spirit8, free website, free theme, themeforces themes, themeforces wordpress themes, themeforces bootstrap theme">
+    <meta name="author" content="ThemeForces.com">
+    
+    <!-- Favicons
+    ================================================== -->
+    <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="img/apple-touch-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="img/apple-touch-icon-114x114.png">
+
+    <!-- Bootstrap -->
+    <link rel="stylesheet" type="text/css"  href="css/bootstrap.css">
+    <link rel="stylesheet" type="text/css" href="fonts/font-awesome/css/font-awesome.css">
+	 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Slider
+    ================================================== -->
+    <link href="css/owl.carousel.css" rel="stylesheet" media="screen">
+    <link href="css/owl.theme.css" rel="stylesheet" media="screen">
+
+    <!-- Stylesheet
+    ================================================== -->
+	    <style>
+        /* Optional: Add some basic styling */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-family: Arial, sans-serif;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #D61C38;
+            color: white;
+        }
+	
+		tr:hover {background-color: #f5f5f5;}
+        tr:nth-child(even) {background-color: #f2f2f2;}
+		  /* Add this to your existing style */
+    .action-btn {
+        margin: 5px;
+        padding: 5px 10px;
+        border: none;
+        border-radius: 5px;
+        color: white;
+        cursor: pointer;
+    }
+    .confirm {
+        background-color: green;
+    }
+    .reject {
+        background-color: red;
+    }
+	
+	    input[type="date"],[type="text"] {
+        width: 200px;
+        padding: 5px 10px;
+        margin: 5px 0;
+        box-sizing: border-box;
+        border: 2px solid #ccc;
+        border-radius: 4px;
+        background-color: #f8f8f8;
+           font-size: 16px;
+    resize: none;
+}
+
+/* Add this to align the buttons to the right */
+#prevPage, #nextPage {
+    float: right;
+}
+
+button {
+    background-color: #4CAF50; /* Green */
+    border: none;
+    color: white;
+    padding: 15px 32px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+    float: right;
+}
+
+#recordNumber {
+    font-size: 16px;
+    color: #333;
+    text-align: right;
+    margin-right: 10px;
+}
+
+    </style>
+    <link rel="stylesheet" type="text/css"  href="css/style.css">
+    <link rel="stylesheet" type="text/css" href="css/responsive.css">
+
+    <link href='http://fonts.googleapis.com/css?family=Lato:100,300,400,700,900,100italic,300italic,400italic,700italic,900italic' rel='stylesheet' type='text/css'>
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,700,300,600,800,400' rel='stylesheet' type='text/css'>
+
+    <script type="text/javascript" src="js/modernizr.custom.js"></script>
+
+   
+	
+  </head>
+  <body>
+    <!-- Navigation
+    ==========================================-->
+    <nav id="tf-menu" class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <!-- Brand and toggle get grouped for better mobile display -->
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="index.php">HotelMIS Brian Chan</a>
+        </div>
+
+        <!-- Collect the nav links, forms, and other content for toggling --><style>.paging{background-color:grey; color:black;}</style>
+           <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+                <ul class="nav navbar-nav navbar-right" id="navbar">        
+        </ul>
+		
+
+			
+			  <ul class="nav navbar-nav navbar-left">
+			<li><a href="index.php" class="page-scroll">Home</a></li>
+                    <li><a href="services.html" class="page-scroll">Services</a></li>
+                    <li><a href="hotel.html" class="page-scroll">Hotel Portfolio</a></li>
+                    <li><a href="limo.html" class="page-scroll">Limo Service</a></li>
+                    <li><a href="contact.php" class="page-scroll">Contact</a></li>
+          </ul>
+        </div><!-- /.navbar-collapse -->
+      </div><!-- /.container-fluid -->
+    </nav>
+
+    <!-- Home Page
+    ==========================================-->
+     <h1>User Access Log</h1>
+    <p>Viewing Access Log for 07/11/2023</p>
+    <input type="date" id="startDate">
+    <input type="date" id="endDate">
+    <input type="text" id="searchInput" onkeyup="searchTable()" placeholder="Search for logs..">
+	<button id="prevPage">Previous</button>
+	<button id="nextPage">Next</button>	
+	<p id="recordNumber"></p>
+	
+    <table id="accessLogTable">
+        <tr>
+            <th onclick="sortTable(0)">User ID</th>
+            <th onclick="sortTable(1)">Username</th>
+            <th onclick="sortTable(2)">Datetime</th>
+            <th onclick="sortTable(3)">Access Event</th>
+            <th onclick="sortTable(4)">Event Log</th>
+			<th>Action</th>
+        </tr>
+  
+</tr>
+<tr>
+    <td>U001</td>
+    <td>John Doe</td>
+    <td>07/11/2023 08:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.2</td>
+</tr>
+<tr>
+    <td>U002</td>
+    <td>Jane Smith</td>
+    <td>07/11/2023 09:15</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.3</td>
+</tr>
+<tr>
+    <td>U001</td>
+    <td>John Doe</td>
+    <td>07/11/2023 10:00</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U003</td>
+    <td>Bob Johnson</td>
+    <td>07/11/2023 10:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.4</td>
+</tr>
+<tr>
+    <td>U002</td>
+    <td>Jane Smith</td>
+    <td>07/11/2023 11:00</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U003</td>
+    <td>Bob Johnson</td>
+    <td>07/11/2023 11:30</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U004</td>
+    <td>Alice Williams</td>
+    <td>07/11/2023 12:00</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.5</td>
+</tr>
+<tr>
+    <td>U005</td>
+    <td>Charlie Brown</td>
+    <td>07/11/2023 12:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.6</td>
+</tr>
+
+<tr>
+    <td>U001</td>
+    <td>John Doe</td>
+    <td>01/11/2023 08:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.2</td>
+</tr>
+<tr>
+    <td>U001</td>
+    <td>John Doe</td>
+    <td>01/11/2023 09:00</td>
+    <td>Access Dashboard</td>
+    <td>Accessed Limo Dashboard</td>
+</tr>
+<tr>
+    <td>U002</td>
+    <td>Jane Smith</td>
+    <td>02/11/2023 09:15</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.3</td>
+</tr>
+<tr>
+    <td>U002</td>
+    <td>Jane Smith</td>
+    <td>02/11/2023 09:45</td>
+    <td>Generate Report</td>
+    <td>Generated Hotel Report</td>
+</tr>
+<tr>
+    <td>U001</td>
+    <td>John Doe</td>
+    <td>03/11/2023 10:00</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U003</td>
+    <td>Bob Johnson</td>
+    <td>04/11/2023 10:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.4</td>
+</tr>
+<tr>
+    <td>U003</td>
+    <td>Bob Johnson</td>
+    <td>04/11/2023 11:00</td>
+    <td>Access Dashboard</td>
+    <td>Accessed Dining Dashboard</td>
+</tr>
+<tr>
+    <td>U002</td>
+    <td>Jane Smith</td>
+    <td>05/11/2023 11:00</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U003</td>
+    <td>Bob Johnson</td>
+    <td>06/11/2023 11:30</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U004</td>
+    <td>Alice Williams</td>
+    <td>07/11/2023 12:00</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.5</td>
+</tr>
+<tr>
+    <td>U004</td>
+    <td>Alice Williams</td>
+    <td>07/11/2023 12:30</td>
+    <td>Generate Report</td>
+    <td>Generated Event Report</td>
+</tr>
+<tr>
+    <td>U005</td>
+    <td>Charlie Brown</td>
+    <td>08/11/2023 12:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.6</td>
+</tr>
+<tr>
+    <td>U005</td>
+    <td>Charlie Brown</td>
+    <td>08/11/2023 13:00</td>
+    <td>Access Dashboard</td>
+    <td>Accessed Hotel Dashboard</td>
+</tr>
+<tr>
+    <td>U004</td>
+    <td>Alice Williams</td>
+    <td>09/11/2023 13:30</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U005</td>
+    <td>Charlie Brown</td>
+    <td>10/11/2023 14:00</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U006</td>
+    <td>David Miller</td>
+    <td>11/11/2023 14:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.7</td>
+</tr>
+<tr>
+    <td>U006</td>
+    <td>David Miller</td>
+    <td>11/11/2023 15:00</td>
+    <td>Generate Report</td>
+    <td>Generated Dining Report</td>
+</tr>
+<tr>
+    <td>U006</td>
+    <td>David Miller</td>
+    <td>12/11/2023 15:30</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+
+<tr>
+    <td>U001</td>
+    <td>John Doe</td>
+    <td>01/11/2023 08:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.2</td>
+</tr>
+<tr>
+    <td>U001</td>
+    <td>John Doe</td>
+    <td>01/11/2023 09:00</td>
+    <td>Access Dashboard</td>
+    <td>Accessed Limo Dashboard</td>
+</tr>
+<tr>
+    <td>U002</td>
+    <td>Jane Smith</td>
+    <td>02/11/2023 09:15</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.3</td>
+</tr>
+<tr>
+    <td>U002</td>
+    <td>Jane Smith</td>
+    <td>02/11/2023 09:45</td>
+    <td>Generate Report</td>
+    <td>Generated Hotel Report</td>
+</tr>
+<tr>
+    <td>U001</td>
+    <td>John Doe</td>
+    <td>03/11/2023 10:00</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U003</td>
+    <td>Bob Johnson</td>
+    <td>04/11/2023 10:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.4</td>
+</tr>
+<tr>
+    <td>U003</td>
+    <td>Bob Johnson</td>
+    <td>04/11/2023 11:00</td>
+    <td>Access Dashboard</td>
+    <td>Accessed Dining Dashboard</td>
+</tr>
+<tr>
+    <td>U002</td>
+    <td>Jane Smith</td>
+    <td>05/11/2023 11:00</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U003</td>
+    <td>Bob Johnson</td>
+    <td>06/11/2023 11:30</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U004</td>
+    <td>Alice Williams</td>
+    <td>07/11/2023 12:00</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.5</td>
+</tr>
+<tr>
+    <td>U004</td>
+    <td>Alice Williams</td>
+    <td>07/11/2023 12:30</td>
+    <td>Generate Report</td>
+    <td>Generated Event Report</td>
+</tr>
+<tr>
+    <td>U005</td>
+    <td>Charlie Brown</td>
+    <td>08/11/2023 12:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.6</td>
+</tr>
+<tr>
+    <td>U005</td>
+    <td>Charlie Brown</td>
+    <td>08/11/2023 13:00</td>
+    <td>Access Dashboard</td>
+    <td>Accessed Hotel Dashboard</td>
+</tr>
+<tr>
+    <td>U004</td>
+    <td>Alice Williams</td>
+    <td>09/11/2023 13:30</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U005</td>
+    <td>Charlie Brown</td>
+    <td>10/11/2023 14:00</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+<tr>
+    <td>U006</td>
+    <td>David Miller</td>
+    <td>11/11/2023 14:30</td>
+    <td>Login</td>
+    <td>Successful login from IP 192.168.1.7</td>
+</tr>
+<tr>
+    <td>U006</td>
+    <td>David Miller</td>
+    <td>11/11/2023 15:00</td>
+    <td>Generate Report</td>
+    <td>Generated Dining Report</td>
+</tr>
+<tr>
+    <td>U006</td>
+    <td>David Miller</td>
+    <td>12/11/2023 15:30</td>
+    <td>Logout</td>
+    <td>Successful logout</td>
+</tr>
+
+        <!-- Add more rows as needed -->
+    </table>
+
+
+
+    <nav id="footer">
+        <div class="container">
+            <div class="pull-left fnav">
+                  <p>ALL RIGHTS RESERVED. COPYRIGHT © 2023. Designed by BC<a href="#"> CISC7196-HotelMIS-2023OCT18</a> </p>
+            </div>
+            <div class="pull-right fnav">
+                <ul class="footer-social">
+                    <li><a href="#"><i class="fa fa-facebook"></i></a></li>
+                    <li><a href="#"><i class="fa fa-dribbble"></i></a></li>
+                    <li><a href="#"><i class="fa fa-google-plus"></i></a></li>
+                    <li><a href="#"><i class="fa fa-twitter"></i></a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script type="text/javascript" src="js/jquery.1.11.1.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script type="text/javascript" src="js/bootstrap.js"></script>
+    <script type="text/javascript" src="js/SmoothScroll.js"></script>
+    <script type="text/javascript" src="js/jquery.isotope.js"></script>
+
+    <script src="js/owl.carousel.js"></script>
+
+    <!-- Javascripts
+    ================================================== -->
+    <script type="text/javascript" src="js/main.js"></script>
+  <script>
+       var user = {
+            username: 'Staff Kobe',
+            type: 'user'
+        };
+
+        var navbar = document.getElementById('navbar');
+
+        if(user) {
+            navbar.innerHTML += '<li><a href="#" class="page-scroll"><i class="fas fa-user"></i> Welcome, ' + user.username + '</a></li>';
+            if(user.type == 'admin') {
+                navbar.innerHTML += '<li><a href="admin.html" class="page-scroll">User Panel</a></li>';
+            }
+           navbar.innerHTML += '<li><a href="#" id="logout" class="page-scroll">Logout</a></li>';
+        } else {
+            navbar.innerHTML += '<li><a href="login.php" class="page-scroll">Login</a></li>';
+        }
+
+        document.getElementById('logout').addEventListener('click', function() {
+            var confirmLogout = window.confirm('Are you sure you want to logout?');
+            if(confirmLogout) {
+                user = null;
+                window.alert('Logout successful!');
+                window.location.href = 'index.php';
+            }
+        });
+		
+		
+function searchTable() {
+    var input, filter, table, tr, td, i, txtValue;
+    input = document.getElementById("searchInput");
+    filter = input.value.toUpperCase();
+    table = document.getElementById("accessLogTable");
+    tr = table.getElementsByTagName("tr");
+    for (i = 0; i < tr.length; i++) {
+        td = tr[i].getElementsByTagName("td")[1]; // Change this to the column you want to filter
+        if (td) {
+            txtValue = td.textContent || td.innerText;
+            if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                tr[i].style.display = "";
+            } else {
+                tr[i].style.display = "none";
+            }
+        }       
+    }
+}
+
+function sortTable(n) {
+    var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+    table = document.getElementById("accessLogTable");
+    switching = true;
+    dir = "asc"; 
+    while (switching) {
+        switching = false;
+        rows = table.rows;
+        for (i = 1; i < (rows.length - 1); i++) {
+            shouldSwitch = false;
+            x = rows[i].getElementsByTagName("TD")[n];
+            y = rows[i + 1].getElementsByTagName("TD")[n];
+            if (dir == "asc") {
+                if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+                    shouldSwitch = true;
+                    break;
+                }
+            } else if (dir == "desc") {
+                if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+                    shouldSwitch = true;
+                    break;
+                }
+            }
+        }
+        if (shouldSwitch) {
+            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+            switching = true;
+            switchcount ++; 
+        } else {
+            if (switchcount == 0 && dir == "asc") {
+                dir = "desc";
+                switching = true;
+            }
+        }
+    }
+}
+
+function dateFromInput(input) {
+    var parts = input.split("/");
+    return new Date(parts[2], parts[1] - 1, parts[0]);
+}
+
+function filterTable() {
+    var startDate = document.getElementById('startDate').value;
+    var endDate = document.getElementById('endDate').value;
+    var table = document.getElementById("accessLogTable");
+    var tr = table.getElementsByTagName("tr");
+    for (i = 0; i < tr.length; i++) {
+        var td = tr[i].getElementsByTagName('td')[2]; // Change this to the column with dates
+        if (td) {
+            var txtValue = td.textContent || td.innerText;
+            var date = dateFromInput(txtValue);
+            if (startDate && date < dateFromInput(startDate)) {
+                tr[i].style.display = "none";
+            } else if (endDate && date > dateFromInput(endDate)) {
+                tr[i].style.display = "none";
+            } else {
+                tr[i].style.display = "";
+            }
+        }
+    }
+}
+
+document.getElementById('startDate').addEventListener('change', filterTable);
+document.getElementById('endDate').addEventListener('change', filterTable);
+
+
+var table = document.getElementById('accessLogTable');
+var totalRows = table.rows.length;
+var limit = 15; // Number of rows per page
+var totalPages = Math.ceil(totalRows / limit);
+var currentPage = 1;
+
+function paginate() {
+    for(var i = 1; i < totalRows; i++) {
+        if(i < ((currentPage - 1) * limit) + 1 || i > (currentPage * limit)) {
+            table.rows[i].style.display = 'none';
+        } else {
+            table.rows[i].style.display = '';
+        }
+    }
+}
+
+document.getElementById('prevPage').addEventListener('click', function() {
+    if(currentPage > 1) {
+        currentPage--;
+        paginate();
+    }
+});
+
+document.getElementById('nextPage').addEventListener('click', function() {
+    if(currentPage < totalPages) {
+        currentPage++;
+        paginate();
+    }
+});
+
+
+
+paginate();
+	
+function paginate() {
+    for(var i = 1; i < totalRows; i++) {
+        if(i < ((currentPage - 1) * limit) + 1 || i > (currentPage * limit)) {
+            table.rows[i].style.display = 'none';
+        } else {
+            table.rows[i].style.display = '';
+        }
+    }
+    // Update record number
+    var startRecord = ((currentPage - 1) * limit) + 1;
+    var endRecord = Math.min(currentPage * limit, totalRows);
+    document.getElementById('recordNumber').innerText = 'Showing ' + startRecord + ' to ' + endRecord + ' of ' + totalRows;
+}	
+		
+		
+    </script>
+
+  </body>
+</html>
