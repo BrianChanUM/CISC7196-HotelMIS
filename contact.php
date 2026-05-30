@@ -8,7 +8,7 @@
 			<meta http-equiv="x-ua-compatible" content="IE=9" />
 			<![endif]-->
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>CISC7196-HotelMIS-2023OCT18</title>
+    <title>HotelMIS-OCT18</title>
     
     <!-- Favicons
     ================================================== -->
