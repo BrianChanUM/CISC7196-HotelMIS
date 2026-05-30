@@ -1,0 +1,36 @@
+<div id="clock"></div>
+<script>
+    function updateClock() {
+        const today = new Date();
+        const hours = today.getHours();
+        const minutes = today.getMinutes();
+        const seconds = today.getSeconds();
+
+        const formattedTime = `${hours}:${minutes}:${seconds}`;
+        document.getElementById('clock').textContent = formattedTime;
+    }
+
+    setInterval(updateClock, 1000);
+</script>
+
+
+<div id="timestamp"></div>
+<script>
+    $(document).ready(function() {
+        setInterval(timestamp, 1000);
+    });
+
+    function timestamp() {
+        $.ajax({
+            url: 'timestamp.php',
+            success: function(data) {
+                $('#timestamp').html(data);
+            },
+        });
+    }
+</script>
+
+<?php
+date_default_timezone_set('YOUR_TIMEZONE');
+echo $timestamp = date('H:i:s');
+?>
