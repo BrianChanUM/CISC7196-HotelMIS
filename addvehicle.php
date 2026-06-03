@@ -1,4 +1,11 @@
-<!DOCTYPE html>
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/language.php';
+require_once __DIR__ . '/function/check_permission.php';
+requirePermission('admin_vehicles', 'create', 'index.php');
+?><!DOCTYPE html>
 <html lang="en">
   <head>
     <!-- Basic Page Needs
@@ -50,18 +57,18 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
-        <!-- Collect the nav links, forms, and other content for toggling --><style>.paging{background-color:grey; color:black;}</style>
+        <!-- Collect the nav links, forms, and other content for toggling -->
 <?php
-    session_start();
     $user = json_encode($_SESSION);
 ?>
 
 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
     <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+    <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	<?php include(__DIR__ . '/layout/navbar.php');?>
 
 	
@@ -101,20 +108,11 @@
     </div>
 		
 		<?php
-$servername = "localhost";
-$username = "root";
-$password = "";
-$dbname = "HMIS";
+require_once __DIR__ . '/config/db_config.php';
 
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
+$conn = getDBConnection();
 
-// Check connection
-if ($conn->connect_error) {
-  die("Connection failed: " . $conn->connect_error);
-}
-
-$sql = "SELECT DISTINCT(VehicleType) FROM hotelvehicleTYPE where status = 1" ;
+$sql = "SELECT DISTINCT(VehicleType) FROM hotelvehicletype WHERE status = 1" ;
 $result = $conn->query($sql);
 ?>
 
@@ -179,19 +177,10 @@ $result = $conn->query($sql);
 </html>
 
 <?php
-// Set your connection variables
-$servername = "localhost";
-$username = "root";
-$password = "";
-$dbname = "HMIS";
+require_once __DIR__ . '/config/db_config.php';
 
-// Create a connection
-$conn = new mysqli($servername, $username, $password, $dbname);
+$conn = getDBConnection();
 
-// Check the connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Get form data (sanitize it!)
     $vehicleType = $conn->real_escape_string($_POST['luxurycars']); // Adjust field name as needed

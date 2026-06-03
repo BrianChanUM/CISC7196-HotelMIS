@@ -1,10 +1,12 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/db_config.php';
 $user = $_SESSION;
 
-// Connect to the database 'localhost', 'root', '', 'HMIS'
-$db = new PDO('mysql:host=localhost;dbname=HMIS', 'root', '');
-
+// Connect to the database using config
+$db = new PDO('mysql:host=' . $db_config['host'] . ';dbname=' . $db_config['dbname'], $db_config['username'], $db_config['password']);
 // Check if the user exists
 $query = $db->prepare('SELECT * FROM user WHERE UserName = :username');
 $query->execute(['username' => $user['username']]);

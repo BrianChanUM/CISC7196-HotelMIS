@@ -1,7 +1,16 @@
 <?php
-    session_start();
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    require_once __DIR__ . '/config/language.php';
+    
+    if (!isset($_SESSION["username"]) || empty($_SESSION["username"])) {
+        header("Location: login.php");
+        exit();
+    }
+    
     $user = json_encode($_SESSION);
-	$loggedInUsername = $_SESSION["username"];
+    $loggedInUsername = $_SESSION["username"];
 ?>
 
 <!DOCTYPE html>
@@ -58,13 +67,18 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
-        <!-- Collect the nav links, forms, and other content for toggling --><style>.paging{background-color:grey; color:black;}</style>
-<div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-    <?php include(__DIR__ . '/layout/header.php');?>
+        <!-- Collect the nav links, forms, and other content for toggling -->
+        <?php
+        $user = json_encode($_SESSION);
+        ?>
+
+        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+            <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+    <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	<?php include(__DIR__ . '/layout/navbar.php');?>
 
 	
@@ -91,23 +105,21 @@
  
 <?php
 $servername = "localhost";
-$username = "root";
-$password = "";
+$dbusername = "root";
+$dbpassword = "123456";
 $dbname = "hmis";
 
 // Create a connection
-$conn = new mysqli($servername, $username, $password, $dbname);
+$conn = new mysqli($servername, $dbusername, $dbpassword, $dbname);
 
 // Check connection
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Query to retrieve data
-$sql = "SELECT a.orderid, a.ordertype, a.OrderCreatedDate, a.email, b.UserName, a.contactno
-        FROM `orderbookings` AS a
-        LEFT JOIN `user` AS b ON a.email = b.email OR a.email = b.username
-        WHERE b.UserName = '$loggedInUsername'
+// Query to retrieve all orders
+$sql = "SELECT orderid, ordertype, OrderCreatedDate, email, contactno, OrderRemark, Status
+        FROM `orderbookings`
         ORDER BY `OrderID` DESC";
 
 $result = $conn->query($sql);
@@ -118,11 +130,9 @@ if ($result === false) {
 }
 
 // Fetch the count query result
-$countSql = "SELECT a.ordertype, a.status, COUNT(*) AS order_count
-             FROM `orderbookings` AS a
-             LEFT JOIN `user` AS b ON a.email = b.email OR a.email = b.username
-             WHERE b.UserName = '$loggedInUsername'
-             GROUP BY a.ordertype";
+$countSql = "SELECT ordertype, COUNT(*) AS order_count
+             FROM `orderbookings`
+             GROUP BY ordertype";
 
 $countResult = $conn->query($countSql);
 
@@ -131,10 +141,6 @@ if ($countResult === false) {
     die("Error executing count query: " . $conn->error);
 }
 
-// Close the connection
-$conn->close();
-
-
 ?>
     <!-- New table for order type count -->
       <td colspan="7">
@@ -142,21 +148,21 @@ $conn->close();
                 <table class="dashboard">
                    
                     <?php
-                   while ($countRow = $countResult->fetch_assoc()) {
+                   $totalResult = $conn->query("SELECT COUNT(*) as total FROM orderbookings");
+$totalOrders = $totalResult ? $totalResult->fetch_assoc()['total'] : 100;
+
+while ($countRow = $countResult->fetch_assoc()) {
 					   
 					     $colors = [
-        'F&B' => '#ff8a80', // Red
-        'HOTEL' => '#64b5f6', // Blue
-        'IRD' => '#81c784', // Green
-        'LIMO' => '#ffb74d', // Orange
+        'F&B' => '#ff8a80',
+        'HOTEL' => '#64b5f6',
+        'IRD' => '#81c784',
+        'LIMO' => '#ffb74d',
     ];
-	 // Get the order type and corresponding color
 	$orderType = $countRow['ordertype'];
-    $widgetColor = isset($colors[$orderType]) ? $colors[$orderType] : '#6c63ff'; // Default color
+    $widgetColor = isset($colors[$orderType]) ? $colors[$orderType] : '#6c63ff';
 	
-	$barWidth = $countRow['order_count'] * 10; // Example: 1 count = 10px width
-	// Calculate the percentage (you can adjust this logic)
-    $totalOrders = 100; // Example: Total orders for 100%
+	$barWidth = $countRow['order_count'] * 10;
     $orderCount = $countRow['order_count'];
     $percentage = ($orderCount / $totalOrders) * 100;
 	
@@ -182,29 +188,26 @@ $conn->close();
             <th>Order ID</th>
 			<th>Order Type</th>
 			<th>Order Date</th>
-            <th>User Email</th>
-			<th>UserName</th>
-			<th>Contact no</th>
-			<th>Details</th>
-            <!-- Add other relevant column headers here -->
+            <th>Email</th>
+			<th>Contact No</th>
+			<th>Remark</th>
+			<th>Status</th>
         </tr>
         <?php
         if ($result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-				//  var_dump($row);
               echo "<tr>";
                 echo "<td>" . $row["orderid"] . "</td>";
 				echo "<td>" . $row["ordertype"] . "</td>";
                 echo "<td>" . $row["OrderCreatedDate"] . "</td>";
                 echo "<td>" . $row["email"] . "</td>";
-				echo "<td>" . ($row["UserName"] ?? "N/A") . "</td>"; // Display username or "N/A"
 				echo "<td>" . $row["contactno"] . "</td>";
-				echo "<td><button onclick=\"openModal('" . $row["orderid"] . "', '" . $row["ordertype"] . "', '" . $row["OrderCreatedDate"] . "', '" . $row["email"] . "', '" . $row["UserName"] . "', '" . $row["contactno"] . "')\">Details</button></td>";
-                // Add other columns as needed
+				echo "<td>" . ($row["OrderRemark"] ?? "N/A") . "</td>";
+				echo "<td>" . ($row["Status"] ?? "N/A") . "</td>";
                 echo "</tr>";
             }
         } else {
-            echo "<tr><td colspan='3'>No orders found.</td></tr>";
+            echo "<tr><td colspan='7'>No orders found.</td></tr>";
         }
         ?> 		
 				
@@ -282,13 +285,19 @@ function closeModal() {
 
 
 var table = document.getElementById('orderbookings');
-var totalRows = table.rows.length -1 ;
+var totalRows = 0;
 var limit = 30; // Number of rows per page
-var totalPages = Math.ceil(totalRows / limit);
+var totalPages = 0;
 var currentPage = 1;
 
+if (table) {
+    totalRows = table.rows.length - 1;
+    totalPages = Math.ceil(totalRows / limit);
+}
+
 function paginate() {
-    for(var i = 1; i < totalRows; i++) {
+    if (!table) return;
+    for(var i = 1; i < table.rows.length; i++) {
         if(i < ((currentPage - 1) * limit) + 1 || i > (currentPage * limit)) {
             table.rows[i].style.display = 'none';
         } else {
@@ -298,7 +307,9 @@ function paginate() {
     // Update record number
     var startRecord = ((currentPage - 1) * limit) + 1;
     var endRecord = Math.min(currentPage * limit, totalRows);
-    document.getElementById('recordNumber').innerText = 'Showing ' + startRecord + ' to ' + endRecord + ' of ' + totalRows ;
+    if (document.getElementById('recordNumber')) {
+        document.getElementById('recordNumber').innerText = 'Showing ' + startRecord + ' to ' + endRecord + ' of ' + totalRows ;
+    }
 }
 
 function changePage(delta) {
@@ -315,6 +326,7 @@ paginate();
 		
 </script>
 
+<?php $conn->close(); ?>
 
   </body>
 </html>

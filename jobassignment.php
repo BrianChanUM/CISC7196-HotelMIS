@@ -1,5 +1,10 @@
 <?php
-    session_start();
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    require_once __DIR__ . '/config/language.php';
+    require_once __DIR__ . '/function/check_permission.php';
+    requireModulePermission('admin_job_assignment', 'index.php');
     $user = json_encode($_SESSION);
 ?>
 <!DOCTYPE html>
@@ -64,11 +69,11 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
         <!-- Collect the nav links, forms, and other content for toggling -->
         
-        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1"> <?php include(__DIR__ . '/layout/header.php');?> <ul class="nav navbar-nav navbar-right" id="navbar"></ul> <?php include(__DIR__ . '/layout/navbar.php');?> </div>
+        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1"> <?php include(__DIR__ . '/layout/header.php');?> <ul class="nav navbar-nav navbar-right" id="navbar"></ul> <?php include(__DIR__ . '/layout/language_switcher.php');?> <?php include(__DIR__ . '/layout/navbar.php');?> </div>
         <!-- /.navbar-collapse -->
       </div>
       <!-- /.container-fluid -->
@@ -113,7 +118,7 @@
   <?php
           $servername = "localhost";
           $username = "root";
-          $password = "";
+          $password = "123456";
           $dbname = "hmis";
 
           // Create connection
@@ -123,7 +128,7 @@
           if ($conn->connect_error) {
               die("Connection failed: " . $conn->connect_error);
           }
-  $sql = "SELECT * FROM orderbookings where ordertype in ('IRD','LIMO') ";
+  $sql = "SELECT * FROM orderbookings where ordertype in ('IRD','Limo') ";
   $result = $conn->query($sql);
 
   if ($result->num_rows > 0) {
@@ -149,7 +154,39 @@
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $orderId = $_POST["orderId"];
     $status = $_POST["status"];
-    $date = date('Y-m-d H:i:s'); // Get the current date and time
+    $date = date('Y-m-d H:i:s');
+
+    $getOrderSql = "SELECT OrderType, OrderRemark FROM orderbookings WHERE OrderID = $orderId";
+    $orderResult = $conn->query($getOrderSql);
+    
+    if ($orderResult && $orderRow = $orderResult->fetch_assoc()) {
+        $orderType = $orderRow['OrderType'];
+        $orderRemark = $orderRow['OrderRemark'];
+        
+        if ($status == 'Canceled') {
+            if ($orderType == 'Hotel') {
+                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                if (isset($matches[1])) {
+                    $roomType = trim($matches[1]);
+                    $restoreSql = "UPDATE hotelroomtype SET daily_quantity = daily_quantity + 1 WHERE HotelRoomtype = ?";
+                    $restoreStmt = $conn->prepare($restoreSql);
+                    $restoreStmt->bind_param("s", $roomType);
+                    $restoreStmt->execute();
+                    $restoreStmt->close();
+                }
+            } elseif ($orderType == 'Limo') {
+                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                if (isset($matches[1])) {
+                    $vehicleType = trim($matches[1]);
+                    $restoreSql = "UPDATE hotelvehicletype SET daily_quantity = daily_quantity + 1 WHERE VehicleType = ?";
+                    $restoreStmt = $conn->prepare($restoreSql);
+                    $restoreStmt->bind_param("s", $vehicleType);
+                    $restoreStmt->execute();
+                    $restoreStmt->close();
+                }
+            }
+        }
+    }
 
     $sql = "UPDATE orderbookings SET Status='$status', OrderModifiedDate=NOW() WHERE OrderID=$orderId";
     if ($conn->query($sql) === TRUE) {
@@ -186,7 +223,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 	<?php
           $servername = "localhost";
           $username = "root";
-          $password = "";
+          $password = "123456";
           $dbname = "hmis";
 
           // Create connection
@@ -241,7 +278,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $orderId = $_POST["orderId"];
     $status = $_POST["status"];
-    $date = date('Y-m-d H:i:s'); // Get the current date and time
+    $date = date('Y-m-d H:i:s');
+
+    $getOrderSql = "SELECT OrderType, OrderRemark FROM orderbookings WHERE OrderID = $orderId";
+    $orderResult = $conn->query($getOrderSql);
+    
+    if ($orderResult && $orderRow = $orderResult->fetch_assoc()) {
+        $orderType = $orderRow['OrderType'];
+        $orderRemark = $orderRow['OrderRemark'];
+        
+        if ($status == 'Canceled') {
+            if ($orderType == 'Hotel') {
+                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                if (isset($matches[1])) {
+                    $roomType = trim($matches[1]);
+                    $restoreSql = "UPDATE hotelroomtype SET daily_quantity = daily_quantity + 1 WHERE HotelRoomtype = ?";
+                    $restoreStmt = $conn->prepare($restoreSql);
+                    $restoreStmt->bind_param("s", $roomType);
+                    $restoreStmt->execute();
+                    $restoreStmt->close();
+                }
+            } elseif ($orderType == 'Limo') {
+                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                if (isset($matches[1])) {
+                    $vehicleType = trim($matches[1]);
+                    $restoreSql = "UPDATE hotelvehicletype SET daily_quantity = daily_quantity + 1 WHERE VehicleType = ?";
+                    $restoreStmt = $conn->prepare($restoreSql);
+                    $restoreStmt->bind_param("s", $vehicleType);
+                    $restoreStmt->execute();
+                    $restoreStmt->close();
+                }
+            }
+        }
+    }
 
    $sql = "UPDATE orderbookings SET Status='$status', OrderModifiedDate=NOW() WHERE OrderID=$orderId";
 
@@ -277,7 +346,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
           $servername = "localhost";
           $username = "root";
-          $password = "";
+          $password = "123456";
           $dbname = "hmis";
 
           // Create connection
@@ -311,7 +380,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $orderId = $_POST["orderId"];
     $status = $_POST["status"];
-    $date = date('Y-m-d H:i:s'); // Get the current date and time
+    $date = date('Y-m-d H:i:s');
+
+    $getOrderSql = "SELECT OrderType, OrderRemark FROM orderbookings WHERE OrderID = $orderId";
+    $orderResult = $conn->query($getOrderSql);
+    
+    if ($orderResult && $orderRow = $orderResult->fetch_assoc()) {
+        $orderType = $orderRow['OrderType'];
+        $orderRemark = $orderRow['OrderRemark'];
+        
+        if ($status == 'Canceled') {
+            if ($orderType == 'Hotel') {
+                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                if (isset($matches[1])) {
+                    $roomType = trim($matches[1]);
+                    $restoreSql = "UPDATE hotelroomtype SET daily_quantity = daily_quantity + 1 WHERE HotelRoomtype = ?";
+                    $restoreStmt = $conn->prepare($restoreSql);
+                    $restoreStmt->bind_param("s", $roomType);
+                    $restoreStmt->execute();
+                    $restoreStmt->close();
+                }
+            } elseif ($orderType == 'Limo') {
+                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                if (isset($matches[1])) {
+                    $vehicleType = trim($matches[1]);
+                    $restoreSql = "UPDATE hotelvehicletype SET daily_quantity = daily_quantity + 1 WHERE VehicleType = ?";
+                    $restoreStmt = $conn->prepare($restoreSql);
+                    $restoreStmt->bind_param("s", $vehicleType);
+                    $restoreStmt->execute();
+                    $restoreStmt->close();
+                }
+            }
+        }
+    }
 
     $sql = "UPDATE orderbookings SET Status='$status', OrderModifiedDate=NOW() WHERE OrderID=$orderId";
 
@@ -369,14 +470,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       var span = document.getElementsByClassName("close")[0];
 
 function openModal(orderId, time, places, eventType, contact, phone, email, status) {
-    var modal = document.getElementById("myModal"); // Make sure "myModal" is the id of your modal
+    var modal = document.getElementById("myModal");
     var modalText = document.getElementById("modalText");
-	
-  <!--  // Fetch driver names
-
-	
-	
-    modalText.innerHTML = "<b>Order Details</b><br>Order ID: " + orderId + "<br>Order Type: " + time + "<br>Time: " + places + "<br>Email: " + eventType + "<br>Order Remark: " + contact + "<br>Last Status: " + phone + "Assigned To " + email + "<br>ModifiedTime: " + status;
+    modalText.innerHTML = "<b>Order Details</b><br>Order ID: " + orderId + "<br>Order Type: " + time + "<br>Time: " + places + "<br>Email: " + eventType + "<br>Order Remark: " + contact + "<br>Last Status: " + phone + "<br>Assigned To: " + email + "<br>Modified Time: " + status;
     modalText.dataset.orderId = orderId; // Set the orderId in a data attribute
     modal.style.display = "block";
 }

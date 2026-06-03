@@ -1,4 +1,9 @@
-<!DOCTYPE html>
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/language.php';
+?><!DOCTYPE html>
 <html lang="en">
   <head>
     <!-- Basic Page Needs
@@ -50,18 +55,18 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
-        <!-- Collect the nav links, forms, and other content for toggling --><style>.paging{background-color:grey; color:black;}</style>
+        <!-- Collect the nav links, forms, and other content for toggling -->
 <?php
-    session_start();
     $user = json_encode($_SESSION);
 ?>
 
 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
     <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+    <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	<?php include(__DIR__ . '/layout/navbar.php');?>
 
 	
@@ -213,8 +218,8 @@
 // Database connection
 $servername = "localhost";
 $username = "root";
-$password = "";
-$dbname = "HMIS";
+$password = "123456";
+$dbname = "hmis";
 
 
 // Create connection

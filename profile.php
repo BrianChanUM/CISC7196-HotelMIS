@@ -1,9 +1,13 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-// Connect to the database 'localhost', 'root', '', 'HMIS'
-$db = new PDO('mysql:host=localhost;dbname=HMIS', 'root', '');
+require_once __DIR__ . '/config/language.php';
+require_once __DIR__ . '/config/db_config.php';
 
+// Connect to the database using config
+$db = new PDO('mysql:host=' . $db_config['host'] . ';dbname=' . $db_config['dbname'], $db_config['username'], $db_config['password']);
 // Check if the user exists
 $query = $db->prepare('SELECT * FROM user WHERE UserName = :username OR Email = :username');
 $query->execute(['username' => $_SESSION['username']]);
@@ -83,15 +87,16 @@ $user = json_encode($_SESSION);
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
-        <!-- Collect the nav links, forms, and other content for toggling --><style>.paging{background-color:grey; color:black;}</style>
+        <!-- Collect the nav links, forms, and other content for toggling -->
 
 
-<div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-    <?php include(__DIR__ . '/layout/header.php');?>
+        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+            <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+    <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	<?php include(__DIR__ . '/layout/navbar.php');?>
 
 	

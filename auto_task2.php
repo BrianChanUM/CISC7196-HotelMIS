@@ -2,8 +2,8 @@
 // Set your connection variables
 $servername = "localhost";
 $username = "root";
-$password = "";
-$dbname = "HMIS";
+$password = "123456";
+$dbname = "hmis";
 
 // Create a connection
 $conn = new mysqli($servername, $username, $password, $dbname);

@@ -1,16 +1,8 @@
 <?php
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "hmis";
+require_once __DIR__ . '/config/db_config.php';
+require_once __DIR__ . '/config/language.php';
 
-    // Create connection
-    $conn = new mysqli($servername, $username, $password, $dbname);
-
-    // Check connection
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
-    }
+$conn = getDBConnection();
 
     $sql = "SELECT OrderType, status, COUNT(*) as Total FROM orderbookings GROUP BY OrderType, status;";
     $result = $conn->query($sql);
@@ -27,18 +19,47 @@
     $sql4 = "SELECT OrderType, COUNT(*) as Total FROM orderbookings WHERE Status='Completed' GROUP BY OrderType";
     $result4 = $conn->query($sql4);
 
-    $data = array(); // Array to hold your data
+    $data = array();
+    $tbcData = array();
+    $confirmedData = array();
+    $cancelledData = array();
+    $completedData = array();
 
-    // Process the results
     if ($result->num_rows > 0) {
         while($row = $result->fetch_assoc()) {
-            // Add each row of data to the $data array
             $data[] = $row;
         }
     }
 
-    // Convert the $data array into JSON format
+    if ($result1->num_rows > 0) {
+        while($row = $result1->fetch_assoc()) {
+            $tbcData[] = $row;
+        }
+    }
+
+    if ($result2->num_rows > 0) {
+        while($row = $result2->fetch_assoc()) {
+            $confirmedData[] = $row;
+        }
+    }
+
+    if ($result3->num_rows > 0) {
+        while($row = $result3->fetch_assoc()) {
+            $cancelledData[] = $row;
+        }
+    }
+
+    if ($result4->num_rows > 0) {
+        while($row = $result4->fetch_assoc()) {
+            $completedData[] = $row;
+        }
+    }
+
     $json_data = json_encode($data);
+    $json_tbc_data = json_encode($tbcData);
+    $json_confirmed_data = json_encode($confirmedData);
+    $json_cancelled_data = json_encode($cancelledData);
+    $json_completed_data = json_encode($completedData);
 
     $conn->close();
 ?>
@@ -100,18 +121,18 @@
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
             </button>
-            <a class="navbar-brand" href="index.php">HotelMIS </a>
+            <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
         <!-- Collect the nav links, forms, and other content for toggling -->
 <?php
-    session_start();
     $user = json_encode($_SESSION);
 ?>
 
 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
      <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+	 <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	 <?php include(__DIR__ . '/layout/navbar.php');?>
  
 	
@@ -165,8 +186,11 @@
     <script type="text/javascript" src="js/main.js"></script>
  <script>
      var data = JSON.parse('<?php echo $json_data; ?>');
+     var tbcData = JSON.parse('<?php echo $json_tbc_data; ?>');
+     var confirmedData = JSON.parse('<?php echo $json_confirmed_data; ?>');
+     var cancelledData = JSON.parse('<?php echo $json_cancelled_data; ?>');
+     var completedData = JSON.parse('<?php echo $json_completed_data; ?>');
 	 
-       // Process the data to extract the values you need for your charts
        var labels = data.map(row => row.OrderType);
         var chartData = data.map(row => row.Total);
 		var backgroundColors = [
@@ -191,12 +215,13 @@ var tabButtons = document.getElementsByClassName("tab");
 for (var i = 0; i < tabButtons.length; i++) {
     tabButtons[i].addEventListener("click", function() {
         var current = document.getElementsByClassName("active");
-        current[0].className = current[0].className.replace(" active", "");
+        if (current.length > 0) {
+            current[0].className = current[0].className.replace(" active", "");
+        }
         this.className += " active";
     });
 }
 		
-       // Create your chart
        var ctx = document.getElementById('chart').getContext('2d');
        var myChart = new Chart(ctx, {
            type: 'bar',
@@ -241,7 +266,8 @@ for (var i = 0; i < tabButtons.length; i++) {
             }
         }
     });
-    document.getElementById('chartDescription').innerText = "This bar chart shows the No. of request.";
+    var descEl = document.getElementById('chartDescription');
+    if (descEl) descEl.innerText = "This bar chart shows the No. of request.";
 }
 
        function showPieChart() {
@@ -253,31 +279,30 @@ for (var i = 0; i < tabButtons.length; i++) {
                    datasets: [{
                        label: '# of Request',
                        data: chartData,
-                       // Rest of your chart configuration...
+                       backgroundColor: backgroundColors,
+                       borderColor: borderColors,
+                       borderWidth: 1
                    }]
                },
-               // Rest of your chart configuration...
+               options: {
+                   responsive: true
+               }
            });
-           document.getElementById('chartDescription').innerText = "This pie chart shows the No. of request.";
+           var descEl = document.getElementById('chartDescription');
+           if (descEl) descEl.innerText = "This pie chart shows the No. of request.";
        }
-	   
-	   
-	   
 
-	   
 function showTBC() {
     myChart.destroy();
-    // Process the 'TBC' data to extract the values you need for your chart
-    var labels = tbcData.map(row => row.OrderType);
-    var chartData = tbcData.map(row => row.Total);
-    // Create a new chart with the 'TBC' data
+    var tbcLabels = tbcData.map(row => row.OrderType);
+    var tbcChartData = tbcData.map(row => row.Total);
     myChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: tbcLabels,
             datasets: [{
-                label: '# of Request',
-                data: chartData,
+                label: '# of TBC Requests',
+                data: tbcChartData,
                 backgroundColor: backgroundColors,
                 borderColor: borderColors,
                 borderWidth: 1
@@ -291,7 +316,92 @@ function showTBC() {
             }
         }
     });
-    document.getElementById('chartDescription').innerText = "This bar chart shows the No. of request with 'TBC' status.";
+    var descEl = document.getElementById('chartDescription');
+    if (descEl) descEl.innerText = "This bar chart shows the No. of request with 'TBC' status.";
+}
+
+function showConfirmed() {
+    myChart.destroy();
+    var confirmedLabels = confirmedData.map(row => row.OrderType);
+    var confirmedChartData = confirmedData.map(row => row.Total);
+    myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: confirmedLabels,
+            datasets: [{
+                label: '# of Confirmed Requests',
+                data: confirmedChartData,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    var descEl = document.getElementById('chartDescription');
+    if (descEl) descEl.innerText = "This bar chart shows the No. of request with 'Confirmed' status.";
+}
+
+function showCancelled() {
+    myChart.destroy();
+    var cancelledLabels = cancelledData.map(row => row.OrderType);
+    var cancelledChartData = cancelledData.map(row => row.Total);
+    myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: cancelledLabels,
+            datasets: [{
+                label: '# of Cancelled Requests',
+                data: cancelledChartData,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    var descEl = document.getElementById('chartDescription');
+    if (descEl) descEl.innerText = "This bar chart shows the No. of request with 'Cancelled' status.";
+}
+
+function showCompleted() {
+    myChart.destroy();
+    var completedLabels = completedData.map(row => row.OrderType);
+    var completedChartData = completedData.map(row => row.Total);
+    myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: completedLabels,
+            datasets: [{
+                label: '# of Completed Requests',
+                data: completedChartData,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    var descEl = document.getElementById('chartDescription');
+    if (descEl) descEl.innerText = "This bar chart shows the No. of request with 'Completed' status.";
 }
     </script>
 

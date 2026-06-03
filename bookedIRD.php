@@ -1,4 +1,33 @@
-<!DOCTYPE html>
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/language.php';
+
+function checkPermission($module, $permissionType) {
+    if (!isset($_SESSION['permissions'])) {
+        return false;
+    }
+    $key = $module . '_' . $permissionType;
+    return isset($_SESSION['permissions'][$key]) && $_SESSION['permissions'][$key];
+}
+
+$showIRDForm = true;
+$irdAccessMessage = "";
+
+if (!isset($_SESSION['username'])) {
+    $showIRDForm = false;
+    $irdAccessMessage = "Please login first.";
+} else {
+    $userRole = $_SESSION['role'];
+    if ($userRole != 'admin') {
+        if (!checkPermission('in_room_dining', 'create')) {
+            $showIRDForm = false;
+            $irdAccessMessage = "You do not have permission to order in-room dining.";
+        }
+    }
+}
+?><!DOCTYPE html>
 <html lang="en">
   <head>
     <!-- Basic Page Needs
@@ -49,13 +78,15 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
-        <!-- Collect the nav links, forms, and other content for toggling --><style>.paging{background-color:grey; color:black;}</style>
+        <!-- Collect the nav links, forms, and other content for toggling -->
 <?php
-    session_start();
     $user = json_encode($_SESSION);
+    
+    $checkinDate = date('Y-m-d');
+    $checkoutDate = date('Y-m-d', strtotime('+1 day'));
 ?>
 
 
@@ -64,6 +95,7 @@
 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
     <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+    <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	<?php include(__DIR__ . '/layout/navbar.php');?>
 
 	
@@ -143,18 +175,11 @@
 					</div>
                 </div>
 <div class="col-md-6">
+<?php if ($showIRDForm): ?>
     <div class="section-title">
         <h3>Welcome to visit our In Room Dining Reservation service.</h3>
         <div class="clearfix"></div>
     </div>
-	
-
-	
-	
-	
-	
-	
-	
     <form action="bookedIRD.php" method="post">
         <div class="row">
             <!-- User details -->
@@ -175,8 +200,8 @@
 <?php
 $servername = "localhost";
 $username = "root";
-$password = "";
-$dbname = "HMIS";
+$password = "123456";
+$dbname = "hmis";
 
 // Create connection
 $conn = new mysqli($servername, $username, $password, $dbname);
@@ -194,7 +219,7 @@ $result = $conn->query($sql);
             <div class="col-md-12">
                 <div class="form-group">
                     <label for="outlet">Service Type</label>
-                    <select class="form-control" id="outlet">
+                    <select class="form-control" id="outlet" name="outlet">
 					<option value="">Select a Room Service Type</option>
                         <?php
             if ($result->num_rows > 0) {
@@ -213,7 +238,7 @@ $result = $conn->query($sql);
 <div class="col-md-12">
     <div class="form-group">
         <label for="bookingDate">Booking Date</label>
-        <input type="date" class="form-control" id="bookingDate" name="bookingDate">
+        <input type="date" class="form-control" id="bookingDate" name="bookingDate" min="<?php echo htmlspecialchars($checkinDate); ?>" max="<?php echo htmlspecialchars($checkoutDate); ?>">
     </div>
 </div>
 
@@ -244,7 +269,14 @@ $result = $conn->query($sql);
             </div>
         </div>
         <button type="submit" class="btn tf-btn btn-success">Submit Booking</button>
+        <button type="button" class="btn tf-btn btn-warning" id="addToCartBtn">Add to Cart</button>
     </form>
+<?php else: ?>
+    <div class="alert alert-warning">
+        <h4>Access Restricted</h4>
+        <p><?php echo htmlspecialchars($irdAccessMessage); ?></p>
+    </div>
+<?php endif; ?>
 			<div id="myModal" class="modal">
   <!-- Modal content -->
   <div class="modal-content">
@@ -273,6 +305,7 @@ $result = $conn->query($sql);
     <!-- Javascripts
     ================================================== -->
     <script type="text/javascript" src="js/main.js"></script>
+    <script src="js/cart.js"></script>
 
 <script>
     // Start and end times (24 hour clock)
@@ -315,6 +348,57 @@ window.onclick = function(event) {
   }
 }
 	
+	var checkinDate = "<?php echo htmlspecialchars($checkinDate); ?>";
+	var checkoutDate = "<?php echo htmlspecialchars($checkoutDate); ?>";
+	
+	$(document).ready(function() {
+		var bookingDateInput = document.getElementById('bookingDate');
+		var bookingTimeInput = document.getElementById('bookingTime');
+		
+		if (bookingDateInput && bookingTimeInput) {
+			bookingDateInput.addEventListener('change', function() {
+				var selectedDate = this.value;
+				if (selectedDate === checkoutDate) {
+					bookingTimeInput.max = "12:00";
+					if (bookingTimeInput.value && bookingTimeInput.value > "12:00") {
+						bookingTimeInput.value = "12:00";
+					}
+				} else {
+					bookingTimeInput.removeAttribute('max');
+				}
+			});
+		}
+	});
+	
+	$('#addToCartBtn').click(function() {
+		var outlet = $('#outlet').val();
+		var date = $('#bookingDate').val();
+		var time = $('#bookingTime').val();
+		var guests = $('#guests').val() || 1;
+		var comment = $('#comment').val() || '';
+		
+		if (!outlet) {
+			alert('Please select a service type');
+			return;
+		}
+		
+		if (!date) {
+			alert('Please select a date');
+			return;
+		}
+		
+		if (!time) {
+			alert('Please select a time');
+			return;
+		}
+		
+		var itemType = 'IRD';
+		var itemName = outlet;
+		var itemPrice = 0;
+		var itemDetails = 'Guests: ' + guests + ', Time: ' + time + (comment ? ', Notes: ' + comment : '');
+		
+		addToCart(itemType, itemName, itemPrice, date, time, guests, itemDetails);
+	});
 	
 </script>
 
@@ -324,8 +408,8 @@ window.onclick = function(event) {
 	<?php
 $servername = "localhost";
 $username = "root";
-$password = "";
-$dbname = "HMIS";
+$password = "123456";
+$dbname = "hmis";
 
 // Create connection
 $conn = new mysqli($servername, $username, $password, $dbname);
@@ -348,6 +432,7 @@ $ordertype = "IRD";
 // Retrieve the date and time from the form
 $bookingDate = $_POST['bookingDate'];
 $bookingTime = $_POST['bookingTime'];
+$outletName = $_POST['outlet'];
 
 // Combine the date and time into a single DateTime object
 $datetime = new DateTime($bookingDate . ' ' . $bookingTime);
@@ -357,13 +442,41 @@ $time = $datetime->format('Y-m-d H:i:s');
 
 $email = $_POST['email'];
 $phone = $_POST['phone'];
-$orderremark = $_POST['comment'];
+$orderremark = $outletName . ' | ' . $_POST['comment'];
 $status = "TBC";
 $ordercreateddate = date('Y-m-d H:i:s'); // Use date function instead of now()
 $ordermodifieddate = date('Y-m-d H:i:s');
 
 // Retrieve the number of guests from the form
 $noofguest = $_POST['guests'];
+
+$checkCapacity = $conn->prepare("SELECT capacity FROM hoteloutlet WHERE OutletName = ?");
+$checkCapacity->bind_param("s", $outletName);
+$checkCapacity->execute();
+$capacityResult = $checkCapacity->get_result();
+
+if ($capacityResult->num_rows > 0) {
+    $capacityRow = $capacityResult->fetch_assoc();
+    $totalCapacity = $capacityRow['capacity'];
+    
+    $bookedQuery = $conn->prepare("SELECT SUM(NoofGuest) as booked FROM orderbookings 
+        WHERE OrderType = 'IRD' AND OrderRemark LIKE ? AND Status IN ('TBC', 'Confirmed') 
+        AND DATE(OrderCreatedDate) = ?");
+    $remarkPattern = '%' . $outletName . '%';
+    $bookedQuery->bind_param("ss", $remarkPattern, $bookingDate);
+    $bookedQuery->execute();
+    $bookedResult = $bookedQuery->get_result();
+    $bookedRow = $bookedResult->fetch_assoc();
+    $bookedSeats = $bookedRow['booked'] ? $bookedRow['booked'] : 0;
+    
+    $availableSeats = $totalCapacity - $bookedSeats;
+    
+    if ($availableSeats < $noofguest) {
+        echo "<script type='text/javascript'>alert('Sorry, only " . $availableSeats . " slots available for " . $outletName . "');</script>";
+        $checkCapacity->close();
+        $conn->close();
+    }
+}
 
 if ($stmt->execute()) {
     $last_id = $conn->insert_id; // Get the last inserted ID

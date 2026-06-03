@@ -56,8 +56,8 @@
             // Replace with actual database query results
             $servername = "localhost";
             $username = "root";
-            $password = "";
-            $dbname = "HMIS";
+            $password = "123456";
+            $dbname = "hmis";
 
             // Create connection
             $conn = new mysqli($servername, $username, $password, $dbname);

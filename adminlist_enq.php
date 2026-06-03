@@ -1,5 +1,8 @@
 <?php
-    session_start();
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    require_once __DIR__ . '/config/language.php';
     $user = json_encode($_SESSION);
 ?>
 
@@ -134,7 +137,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
         <!-- Collect the nav links, forms, and other content for toggling -->
 
@@ -142,6 +145,7 @@
 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
     <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+    <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	<?php include(__DIR__ . '/layout/navbar.php');?>
 
 	
@@ -181,7 +185,7 @@
           <?php
           $servername = "localhost";
           $username = "root";
-          $password = "";
+          $password = "123456";
           $dbname = "hmis";
 
           // Create connection

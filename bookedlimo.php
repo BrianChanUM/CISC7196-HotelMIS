@@ -1,4 +1,33 @@
-<!DOCTYPE html>
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/language.php';
+
+function checkPermission($module, $permissionType) {
+    if (!isset($_SESSION['permissions'])) {
+        return false;
+    }
+    $key = $module . '_' . $permissionType;
+    return isset($_SESSION['permissions'][$key]) && $_SESSION['permissions'][$key];
+}
+
+$showLimoForm = true;
+$limoAccessMessage = "";
+
+if (!isset($_SESSION['username'])) {
+    $showLimoForm = false;
+    $limoAccessMessage = "Please login first.";
+} else {
+    $userRole = $_SESSION['role'];
+    if ($userRole != 'admin') {
+        if (!checkPermission('limo_service', 'create')) {
+            $showLimoForm = false;
+            $limoAccessMessage = "You do not have permission to book limo service.";
+        }
+    }
+}
+?><!DOCTYPE html>
 <html lang="en">
   <head>
     <!-- Basic Page Needs
@@ -56,21 +85,27 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
-        <!-- Collect the nav links, forms, and other content for toggling --><style>.paging{background-color:grey; color:black;}</style>
+        <!-- Collect the nav links, forms, and other content for toggling -->
 <?php
-    session_start();
     $user = json_encode($_SESSION);
+    
+    $limoImages = glob(__DIR__ . '/img/limo/*.{jpg,jpeg,png,gif}', GLOB_BRACE);
+    $limoImagePaths = [];
+    foreach ($limoImages as $img) {
+        $limoImagePaths[] = 'img/limo/' . basename($img);
+    }
+    $limoImagePathsJSON = json_encode($limoImagePaths);
 ?>
 
 <?php
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $servername = "localhost";
     $username = "root";
-    $password = "";
-    $dbname = "HMIS";
+    $password = "123456";
+    $dbname = "hmis";
 
     // Create connection
     $conn = new mysqli($servername, $username, $password, $dbname);
@@ -81,8 +116,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     // Prepare and bind
-    $stmt = $conn->prepare("INSERT INTO orderbookings (OrderType,Time,ContactNo, Email, OrderRemark, Status, OrderCreatedDate, OrderModifiedDate, NoofGuest) VALUES (?, ?,?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssssssi", $ordertype, $time, $phone, $email, $orderremark, $status, $ordercreateddate, $ordermodifieddate, $noofguest);
+    $stmt = $conn->prepare("INSERT INTO orderbookings (OrderType,Time,ContactNo, Email, OrderRemark, Status, OrderCreatedDate, OrderModifiedDate, NoofGuest, isRequired, AssignedTo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssssiis", $ordertype, $time, $phone, $email, $orderremark, $status, $ordercreateddate, $ordermodifieddate, $noofguest, $isRequired, $assignedTo);
 
     // Set parameters and execute
     $ordertype = "Limo";
@@ -90,11 +125,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $email = isset($_POST['email']) ? $_POST['email'] : '';
     $phone = isset($_POST['phone']) ? $_POST['phone'] : '';
-    $orderremark = isset($_POST['comment']) ? $_POST['comment'] : '';
+    $vehicleType = isset($_POST['vehicleType']) ? $_POST['vehicleType'] : '';
+    $orderremark = $vehicleType . ' | ' . (isset($_POST['comment']) ? $_POST['comment'] : '');
     $status = "TBC";
     $ordercreateddate = date('Y-m-d H:i:s');
     $ordermodifieddate = date('Y-m-d H:i:s');
     $noofguest = isset($_POST['guests']) ? $_POST['guests'] : '';
+    $isRequired = 0; // Default value for isRequired field
+    $assignedTo = ''; // Default value for AssignedTo field
+    
+    $checkStock = $conn->prepare("SELECT daily_quantity FROM hotelvehicletype WHERE VehicleType = ?");
+    $checkStock->bind_param("s", $vehicleType);
+    $checkStock->execute();
+    $stockResult = $checkStock->get_result();
+    
+    if ($stockResult->num_rows > 0) {
+        $stockRow = $stockResult->fetch_assoc();
+        $availableVehicles = $stockRow['daily_quantity'];
+        
+        if ($availableVehicles <= 0) {
+            echo "<script type='text/javascript'>alert('Sorry, no vehicles available for " . $vehicleType . "');</script>";
+            $checkStock->close();
+            $conn->close();
+        } else {
+            $deductStock = $conn->prepare("UPDATE hotelvehicletype SET daily_quantity = daily_quantity - 1 WHERE VehicleType = ? AND daily_quantity > 0");
+            $deductStock->bind_param("s", $vehicleType);
+            $deductStock->execute();
+            $deductStock->close();
+        }
+    }
+    $checkStock->close();
+    
     // Retrieve the date and time from the form
     $bookingDate = isset($_POST['bookingDate']) ? $_POST['bookingDate'] : '';
     $bookingTime = isset($_POST['bookingTime']) ? $_POST['bookingTime'] : '';
@@ -121,6 +182,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
     <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+    <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	<?php include(__DIR__ . '/layout/navbar.php');?>
 
 	
@@ -154,7 +216,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <div id="slideshow-inner">
 							<ul>
 								<li id="slide1">
-									<img src="img/LimoLogo/1.jpg" />
+									<img src="" class="limo-slideshow-img" data-index="0" />
 									<div class="description">
 										<input type="checkbox" id="show-description-1"/>
 										<label for="show-description-1" class="show-description-label">I</label>
@@ -165,7 +227,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 									</div>
 								</li>
 								<li id="slide2">
-									<img src="img/LimoLogo/2.jpg" />
+									<img src="" class="limo-slideshow-img" data-index="1" />
 									<div class="description">
 										<input type="checkbox" id="show-description-2"/>
 										<label for="show-description-2" class="show-description-label">1</label>
@@ -176,7 +238,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 									</div>
 								</li>
 								<li id="slide3">
-									<img src="img/LimoLogo/3.jpg" />
+									<img src="" class="limo-slideshow-img" data-index="2" />
 									<div class="description">
 										<input type="checkbox" id="show-description-3"/>
 										<label for="show-description-3" class="show-description-label">2</label>
@@ -187,7 +249,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 									</div>
 								</li>
 								<li id="slide4">
-									<img src="img/LimoLogo/4.jpg" />
+									<img src="" class="limo-slideshow-img" data-index="3" />
 									<div class="description">
 										<input type="checkbox" id="show-description-4"/>
 										<label for="show-description-4" class="show-description-label">3</label>
@@ -198,7 +260,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 									</div>
 								</li>
 								<li id="slide5">
-									<img src="img/LimoLogo/5.jpg" />
+									<img src="" class="limo-slideshow-img" data-index="4" />
 									<div class="description">
 										<input type="checkbox" id="show-description-5"/>
 										<label for="show-description-5" class="show-description-label">4</label>
@@ -213,6 +275,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 					</div>
                 </div>
                 <div class="col-md-6">
+<?php if ($showLimoForm): ?>
 					<div class="section-title">
                      <h3>Kindly input the following details for our limo service.</h3>
                           <div class="clearfix"></div>
@@ -240,8 +303,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <?php
 $servername = "localhost";
 $username = "root";
-$password = "";
-$dbname = "HMIS";
+$password = "123456";
+$dbname = "hmis";
 
 // Create connection
 $conn = new mysqli($servername, $username, $password, $dbname);
@@ -251,20 +314,20 @@ if ($conn->connect_error) {
   die("Connection failed: " . $conn->connect_error);
 }
 
-$sql = "SELECT DISTINCT(VehicleType) FROM hotelvehicleTYPE where status = 1" ;
+$sql = "SELECT VehicleType, daily_quantity FROM hotelvehicletype WHERE status = 1 AND daily_quantity > 0";
 $result = $conn->query($sql);
 ?>
 
 <div class="col-md-12">
     <div class="form-group">
         <label for="luxurycars">Luxury Cars</label>
-        <select class="form-control" id="luxurycars">
+        <select class="form-control" id="luxurycars" name="vehicleType" onchange="updateVehicleInfo()">
             <option value="">Select a Luxury Car</option>
             <?php
             if ($result->num_rows > 0) {
                 // output data of each row
                 while($row = $result->fetch_assoc()) {
-                    echo "<option value=\"" . $row["VehicleType"] . "\">" . $row["VehicleType"] . "</option>";
+                    echo "<option value=\"" . $row["VehicleType"] . "\" data-quantity=\"" . $row["daily_quantity"] . "\">" . $row["VehicleType"] . " (Available: " . $row["daily_quantity"] . ")</option>";
                 }
             } else {
                 echo "0 results";
@@ -272,6 +335,9 @@ $result = $conn->query($sql);
             ?>
         </select>
     </div>
+</div>
+<div class="col-md-12">
+    <div id="vehicleInfo" class="help-block" style="color: #666; font-size: 14px;"></div>
 </div>
 
 
@@ -317,10 +383,15 @@ $result = $conn->query($sql);
                         </div>
                         
                         
-<button type="submit" class="btn tf-btn btn-success">Submit Request</button>
-					
+                        <button type="submit" class="btn tf-btn btn-success">Submit Booking</button>
+                        <button type="button" class="btn tf-btn btn-warning" id="addToCartBtn">Add to Cart</button>
                     </form>
-					
+<?php else: ?>
+                    <div class="alert alert-warning">
+                        <h4>Access Restricted</h4>
+                        <p><?php echo htmlspecialchars($limoAccessMessage); ?></p>
+                    </div>
+<?php endif; ?>
                 </div>
             </div>
         </div>
@@ -341,6 +412,7 @@ $result = $conn->query($sql);
     <!-- Javascripts
     ================================================== -->
     <script type="text/javascript" src="js/main.js"></script>
+<script src="js/cart.js"></script>
 <script>
     var select = document.getElementById("bookingTime");
 var hours, minutes, ampm;
@@ -360,6 +432,78 @@ for(var i = 1800; i <= 82800; i += 1800){
 
 $('form').submit(function() {
     $(this).find('button[type="submit"]').prop('disabled', true);
+});
+
+const limoImagePaths = <?php echo $limoImagePathsJSON; ?>;
+
+function getRandomLimoImages(count) {
+    if (limoImagePaths.length === 0) return [];
+    const shuffled = [...limoImagePaths].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, count);
+}
+
+function updateLimoImages() {
+    const images = document.querySelectorAll('.limo-slideshow-img');
+    if (images.length === 0) return;
+    const randomImages = getRandomLimoImages(images.length);
+    images.forEach((img, index) => {
+        if (randomImages[index]) {
+            img.src = randomImages[index];
+        }
+    });
+}
+
+const vehicleSelect = document.getElementById('luxurycars');
+const vehicleInfo = document.getElementById('vehicleInfo');
+
+function updateVehicleInfo() {
+    if (vehicleSelect && vehicleInfo) {
+        const selectedOption = vehicleSelect.options[vehicleSelect.selectedIndex];
+        const quantity = selectedOption.getAttribute('data-quantity');
+        if (quantity) {
+            vehicleInfo.textContent = 'Available Vehicles: ' + quantity;
+        } else {
+            vehicleInfo.textContent = '';
+        }
+    }
+}
+
+if (vehicleSelect) {
+    vehicleSelect.addEventListener('change', function() {
+        updateLimoImages();
+        updateVehicleInfo();
+    });
+}
+
+updateLimoImages();
+
+$('#addToCartBtn').click(function() {
+    var vehicleType = $('#luxurycars').val();
+    var date = $('#bookingDate').val();
+    var time = $('#bookingTime').val();
+    var guests = $('#guests').val() || 1;
+    var destination = $('#destination').val() || '';
+    var comment = $('#comment').val() || '';
+    
+    if (!vehicleType) {
+        alert('Please select a vehicle type');
+        return;
+    }
+    if (!date) {
+        alert('Please select a pickup date');
+        return;
+    }
+    if (!time) {
+        alert('Please select a pickup time');
+        return;
+    }
+    
+    var itemType = 'Limo';
+    var itemName = vehicleType;
+    var itemPrice = 0; // Price could be calculated based on vehicle type
+    var itemDetails = 'Destination: ' + destination + ', Comment: ' + comment;
+    
+    addToCart(itemType, itemName, itemPrice, date, time, guests, itemDetails);
 });
 </script>
   </body>

@@ -1,16 +1,8 @@
 <?php
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "hmis";
+require_once __DIR__ . '/config/db_config.php';
+require_once __DIR__ . '/config/language.php';
 
-    // Create connection
-    $conn = new mysqli($servername, $username, $password, $dbname);
-
-    // Check connection
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
-    }
+$conn = getDBConnection();
 
     // Query to get user role details
     $sql = "SELECT Role, COUNT(*) as Total FROM user GROUP BY Role";
@@ -124,18 +116,18 @@
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
             </button>
-            <a class="navbar-brand" href="index.php">HotelMIS </a>
+            <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
         <!-- Collect the nav links, forms, and other content for toggling -->
 <?php
-    session_start();
     $user = json_encode($_SESSION);
 ?>
 
 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
      <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+	 <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	 <?php include(__DIR__ . '/layout/navbar.php');?>
  
 	
@@ -210,39 +202,41 @@
     ================================================== -->
     <script type="text/javascript" src="js/main.js"></script>
  <script>
-// JavaScript
-let data = <?php echo $json_data; ?>; // This is your data from the PHP script
-  var userDetails = JSON.parse('<?php echo $json_userDetails; ?>');
-     var tableBody = document.getElementById('userDetailsBody');
-// Function to populate the table with data
+let data = <?php echo $json_data; ?>;
+var userDetails = JSON.parse('<?php echo $json_userDetails; ?>');
+var tableBody = document.getElementById('userDetailsBody');
+
+function createCell(text) {
+    const cell = document.createElement('td');
+    cell.textContent = text;
+    return cell;
+}
+
 function populateTable(data) {
     const tableBody = document.getElementById('tableBody');
-    tableBody.innerHTML = ''; // Clear the table body
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
 
     data.forEach(item => {
-        const row = document.createElement('tr'); // Create a new table row
-
-        const createCell = (text) => {
-            const cell = document.createElement('td');
-            cell.textContent = text;
-            return cell;
-        };
-
-        row.appendChild(createCell(item.Role)); // Role cell
-        row.appendChild(createCell(item.Total)); // Total cell
-
+        const row = document.createElement('tr');
+        row.appendChild(createCell(item.Role));
+        row.appendChild(createCell(item.Total));
         row.addEventListener('click', () => viewProfiles(item.Role));
-
-        tableBody.appendChild(row); // Append the row to the table body
+        tableBody.appendChild(row);
     });
 }
 
 function viewProfiles(role) {
-    // Fetch the profile details of users with the specified role
     fetch(`fetchProfiles.php?role=${role}`)
         .then(response => response.json())
         .then(data => {
+            if (!data || data.length === 0) {
+                console.log('No data found for role:', role);
+                return;
+            }
+
             const table = document.createElement('table');
+            table.className = 'styled-table';
 
             const createHeaderCell = (text) => {
                 const th = document.createElement('th');
@@ -258,41 +252,48 @@ function viewProfiles(role) {
             thead.appendChild(headerRow);
             table.appendChild(thead);
 
-             const tbody = document.createElement('tbody');
+            const tbody = document.createElement('tbody');
             data.forEach(item => {
                 const row = document.createElement('tr');
                 Object.values(item).forEach(value => {
-                    row.appendChild(createCell(value));
+                    row.appendChild(createCell(value !== null ? value : 'N/A'));
                 });
                 tbody.appendChild(row);
             });
             table.appendChild(tbody);
 
-            document.getElementById('dropdownDiv').innerHTML = ''; // Clear the dropdown div
-            document.getElementById('dropdownDiv').appendChild(table); // Append the table
+            var dropdownDiv = document.getElementById('dropdownDiv');
+            if (dropdownDiv) {
+                dropdownDiv.innerHTML = '';
+                dropdownDiv.appendChild(table);
+            } else {
+                var container = document.createElement('div');
+                container.id = 'dropdownDiv';
+                container.style.marginTop = '20px';
+                container.appendChild(table);
+                document.getElementById('tf-about').appendChild(container);
+            }
         })
         .catch(error => {
             console.error('Error:', error);
         });
 }
 
-
-// Populate the table with data when the page loads
 window.onload = function() {
     populateTable(data);
 
-    for (var i = 0; i < userDetails.length; i++) {
-        var row = document.createElement('tr');
-
-        var columns = ['UID', 'UserName', 'Role', 'CreateDate', 'Email', 'Department', 'Level', 'SalaryRate', 'OnboardDate'];
-
-        columns.forEach(function(columnName) {
-            var column = document.createElement('td');
-            column.innerText = userDetails[i][columnName];
-            row.appendChild(column);
-        });
-
-        tableBody.appendChild(row);
+    if (tableBody && userDetails.length > 0) {
+        for (var i = 0; i < userDetails.length; i++) {
+            var row = document.createElement('tr');
+            var columns = ['UID', 'UserName', 'Role', 'CreateDate', 'Email', 'Department', 'Level', 'SalaryRate', 'OnboardDate'];
+            
+            columns.forEach(function(columnName) {
+                var column = document.createElement('td');
+                column.innerText = userDetails[i][columnName] !== null ? userDetails[i][columnName] : 'N/A';
+                row.appendChild(column);
+            });
+            tableBody.appendChild(row);
+        }
     }
 }
  </script>

@@ -1,6 +1,75 @@
 <?php
-    session_start();
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    require_once __DIR__ . '/config/language.php';
+    require_once __DIR__ . '/function/check_permission.php';
+    requirePermission('admin_outlets', 'view', 'index.php');
+    require_once __DIR__ . '/config/db_config.php';
+
+    $conn = getDBConnection();
+
     $user = json_encode($_SESSION);
+
+    if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
+        header('Content-Type: application/json');
+        
+        if ($_POST['action'] == 'delete') {
+            if (!checkPermission('admin_outlets', 'delete')) {
+                echo json_encode(['success' => false, 'message' => 'Access denied. You do not have permission to delete.']);
+                exit;
+            }
+            $outletName = $_POST['outletName'];
+            $stmt = $conn->prepare("DELETE FROM hoteloutlet WHERE OutletName = ?");
+            $stmt->bind_param("s", $outletName);
+            if ($stmt->execute()) {
+                echo json_encode(['success' => true, 'message' => 'Outlet deleted successfully']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Error deleting outlet']);
+            }
+            $stmt->close();
+            exit;
+        }
+        
+        if ($_POST['action'] == 'update') {
+            if (!checkPermission('admin_outlets', 'edit')) {
+                echo json_encode(['success' => false, 'message' => 'Access denied. You do not have permission to edit.']);
+                exit;
+            }
+            $oldOutletName = $_POST['oldOutletName'];
+            $outletName = $_POST['outletName'];
+            $outletSlogan = $_POST['outletSlogan'];
+            $outletMenu = $_POST['outletMenu'];
+            $openingHour = $_POST['openingHour'];
+            $style = $_POST['style'];
+            $status = $_POST['status'];
+            
+            $stmt = $conn->prepare("UPDATE hoteloutlet SET OutletName = ?, OutletSlogan = ?, OutletMenu = ?, `Opening Hour` = ?, Style = ?, Status = ? WHERE OutletName = ?");
+            $stmt->bind_param("sssssis", $outletName, $outletSlogan, $outletMenu, $openingHour, $style, $status, $oldOutletName);
+            if ($stmt->execute()) {
+                echo json_encode(['success' => true, 'message' => 'Outlet updated successfully']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Error updating outlet']);
+            }
+            $stmt->close();
+            exit;
+        }
+        
+        if ($_POST['action'] == 'get') {
+            $outletName = $_POST['outletName'];
+            $stmt = $conn->prepare("SELECT * FROM hoteloutlet WHERE OutletName = ?");
+            $stmt->bind_param("s", $outletName);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($row = $result->fetch_assoc()) {
+                echo json_encode(['success' => true, 'data' => $row]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Outlet not found']);
+            }
+            $stmt->close();
+            exit;
+        }
+    }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -51,11 +120,11 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
         <!-- Collect the nav links, forms, and other content for toggling -->
         
-        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1"> <?php include(__DIR__ . '/layout/header.php');?> <ul class="nav navbar-nav navbar-right" id="navbar"></ul> <?php include(__DIR__ . '/layout/navbar.php');?> </div>
+        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1"> <?php include(__DIR__ . '/layout/header.php');?> <ul class="nav navbar-nav navbar-right" id="navbar"></ul> <?php include(__DIR__ . '/layout/language_switcher.php');?> <?php include(__DIR__ . '/layout/navbar.php');?> </div>
         <!-- /.navbar-collapse -->
       </div>
       <!-- /.container-fluid -->
@@ -75,12 +144,7 @@
 			<button class="tablinks" onclick="openTab(event, 'All')">All</button>
               <button class="tablinks" onclick="openTab(event, 'TBC')">Active Outlet</button>
               <button class="tablinks" onclick="openTab(event, 'Confirmed')">Inactive Outlet</button>
-        
-	  <button onclick="changePage(-1)">Previous</button>
-            <button onclick="changePage(1)">Next</button>
-			
             </div> 
-	<p id="recordNumber"></p>
           <div class="col-md-6">
            
 			
@@ -104,6 +168,40 @@
                 <button class="action-btn reject" onclick="rejectBooking()">Reject</button>
                 <button id="closeButton" onclick="closeModal()">X</button>
               </div>
+            </div>
+          </div>
+          
+          <div id="editModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5);">
+            <div class="modal-content" style="background-color:#fefefe; margin:10% auto; padding:20px; border:1px solid #888; width:50%; max-width:500px;">
+              <span class="close" onclick="closeEditModal()" style="float:right; font-size:28px; font-weight:bold; cursor:pointer;">&times;</span>
+              <h3>Edit Outlet</h3>
+              <form id="editForm">
+                <input type="hidden" id="oldOutletName" name="oldOutletName">
+                
+                <label for="outletName">Outlet Name:</label>
+                <input type="text" id="outletName" name="outletName" required style="width:100%; padding:8px; margin:5px 0;"><br>
+                
+                <label for="outletSlogan">Slogan:</label>
+                <input type="text" id="outletSlogan" name="outletSlogan" style="width:100%; padding:8px; margin:5px 0;"><br>
+                
+                <label for="outletMenu">Menu:</label>
+                <input type="text" id="outletMenu" name="outletMenu" style="width:100%; padding:8px; margin:5px 0;"><br>
+                
+                <label for="openingHour">Opening Hour:</label>
+                <input type="text" id="openingHour" name="openingHour" style="width:100%; padding:8px; margin:5px 0;"><br>
+                
+                <label for="style">Style:</label>
+                <input type="text" id="style" name="style" style="width:100%; padding:8px; margin:5px 0;"><br>
+                
+                <label for="status">Status:</label>
+                <select id="status" name="status" style="width:100%; padding:8px; margin:5px 0;">
+                  <option value="1">Active</option>
+                  <option value="0">Inactive</option>
+                </select><br><br>
+                
+                <button type="submit" class="action-btn edit-btn" style="background-color:#4CAF50;color:white;padding:8px 16px;border:none;cursor:pointer;">Update</button>
+                <button type="button" onclick="closeEditModal()" class="action-btn delete-btn" style="background-color:#f44336;color:white;padding:8px 16px;border:none;cursor:pointer;">Cancel</button>
+              </form>
             </div>
           </div>
         </div>
@@ -130,10 +228,28 @@
       var span = document.getElementsByClassName("close")[0];
 
 function openModal(orderId, OutletName, places, eventType, contact, phone, email, status) {
-    var modal = document.getElementById("myModal"); // Make sure "myModal" is the id of your modal
+    var modal = document.getElementById("myModal");
     var modalText = document.getElementById("modalText");
+    var buttonContainer = document.getElementById("buttonContainer");
     modalText.innerHTML = "<b>Order Details</b><br>OutletName: " + orderId + "<br>Order Type: " + OutletName + "<br>OutletName: " + places + "<br>Email: " + eventType + "<br>Order Remark: " + contact + "<br>Last Status: " + phone + "<br>Order Created Date: " + email + "<br>Status: " + status;
-    modalText.dataset.orderId = orderId; // Set the orderId in a data attribute
+    modalText.dataset.orderId = orderId;
+    buttonContainer.style.display = "block";
+    modal.style.display = "block";
+}
+
+function openOutletModal(outletName, slogan, menu, openingHour, status, style) {
+    var modal = document.getElementById("myModal");
+    var modalText = document.getElementById("modalText");
+    var buttonContainer = document.getElementById("buttonContainer");
+    var statusText = status == 1 ? "Active" : "Inactive";
+    modalText.innerHTML = "<b>Outlet Details</b><br><br>" +
+                          "<b>Name:</b> " + outletName + "<br><br>" +
+                          "<b>Slogan:</b> " + slogan + "<br><br>" +
+                          "<b>Menu:</b> " + menu + "<br><br>" +
+                          "<b>Opening Hour:</b> " + openingHour + "<br><br>" +
+                          "<b>Style:</b> " + style + "<br><br>" +
+                          "<b>Status:</b> " + statusText;
+    buttonContainer.style.display = "none";
     modal.style.display = "block";
 }
       span.onclick = function() {
@@ -199,43 +315,129 @@ function openModal(orderId, OutletName, places, eventType, contact, phone, email
             tablinks[i].className = tablinks[i].className.replace(" active", "");
           }
           document.getElementById(status).style.display = "block";
-          evt.currentTarget.className += " active";
+          if (evt) {
+            evt.currentTarget.className += " active";
+          }
         }
 		
 		document.addEventListener('DOMContentLoaded', function() {
   openTab(null, 'All');
 });
-		
-		
-		
-        var table = document.getElementById('orderbookings');
-        var totalRows = table.rows.length - 1;
-        var limit = 10; // Number of rows per page
-        var totalPages = Math.ceil(totalRows / limit);
-        var currentPage = 1;
 
-        function paginate() {
-          for (var i = 1; i < totalRows; i++) {
-            if (i < ((currentPage - 1) * limit) + 1 || i > (currentPage * limit)) {
-              table.rows[i].style.display = 'none';
-            } else {
-              table.rows[i].style.display = '';
+        function openEditModal(outletName) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "manageoutlet.php", true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            xhr.onreadystatechange = function() {
+                if (this.readyState === 4 && this.status === 200) {
+                    var response = JSON.parse(this.responseText);
+                    if (response.success) {
+                        document.getElementById("oldOutletName").value = outletName;
+                        document.getElementById("outletName").value = response.data.OutletName;
+                        document.getElementById("outletSlogan").value = response.data.OutletSlogan;
+                        document.getElementById("outletMenu").value = response.data.OutletMenu;
+                        document.getElementById("openingHour").value = response.data['Opening Hour'];
+                        document.getElementById("style").value = response.data.Style;
+                        document.getElementById("status").value = response.data.Status;
+                        document.getElementById("editModal").style.display = "block";
+                    } else {
+                        alert(response.message);
+                    }
+                }
+            };
+            xhr.send("action=get&outletName=" + encodeURIComponent(outletName));
+        }
+
+        function closeEditModal() {
+            document.getElementById("editModal").style.display = "none";
+        }
+
+        document.getElementById("editForm").addEventListener("submit", function(e) {
+            e.preventDefault();
+            var formData = new FormData();
+            formData.append("action", "update");
+            formData.append("oldOutletName", document.getElementById("oldOutletName").value);
+            formData.append("outletName", document.getElementById("outletName").value);
+            formData.append("outletSlogan", document.getElementById("outletSlogan").value);
+            formData.append("outletMenu", document.getElementById("outletMenu").value);
+            formData.append("openingHour", document.getElementById("openingHour").value);
+            formData.append("style", document.getElementById("style").value);
+            formData.append("status", document.getElementById("status").value);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "manageoutlet.php", true);
+            xhr.onreadystatechange = function() {
+                if (this.readyState === 4 && this.status === 200) {
+                    var response = JSON.parse(this.responseText);
+                    alert(response.message);
+                    if (response.success) {
+                        closeEditModal();
+                        location.reload();
+                    }
+                }
+            };
+            xhr.send(new URLSearchParams(formData));
+        });
+
+        function deleteOutlet(outletName) {
+            if (confirm("Are you sure you want to delete this outlet?")) {
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "manageoutlet.php", true);
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                xhr.onreadystatechange = function() {
+                    if (this.readyState === 4 && this.status === 200) {
+                        var response = JSON.parse(this.responseText);
+                        alert(response.message);
+                        if (response.success) {
+                            location.reload();
+                        }
+                    }
+                };
+                xhr.send("action=delete&outletName=" + encodeURIComponent(outletName));
             }
-          }
-          // Update record number
-          var startRecord = ((currentPage - 1) * limit) + 1;
-          var endRecord = Math.min(currentPage * limit, totalRows);
-          document.getElementById('recordNumber').innerText = 'Showing ' + startRecord + ' to ' + endRecord + ' of ' + totalRows;
         }
 
-        function changePage(delta) {
-          currentPage += delta;
-          // Make sure currentPage is within valid range
-          currentPage = Math.max(1, Math.min(currentPage, Math.ceil(totalRows / limit)));
-          paginate();
-        }
-        paginate();
+        function searchTable() {
+            var input = document.getElementById("searchInput");
+            var filter = input.value.toUpperCase();
+            
+            var activeTab = document.querySelector(".tablinks.active");
+            var tableId = "outletTableAll";
+            if (activeTab) {
+                var tabName = activeTab.textContent.trim();
+                if (tabName === "Active Outlet") {
+                    tableId = "outletTableActive";
+                } else if (tabName === "Inactive Outlet") {
+                    tableId = "outletTableInactive";
+                }
+            }
+            
+            var table = document.getElementById(tableId);
+            if (!table) {
+                table = document.getElementById("outletTableAll");
+            }
+            
+            var tr = table.getElementsByTagName("tr");
 
+            for (var i = 1; i < tr.length; i++) {
+                var td = tr[i].getElementsByTagName("td")[0];
+                if (td) {
+                    var txtValue = td.textContent || td.innerText;
+                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                        tr[i].style.display = "";
+                    } else {
+                        tr[i].style.display = "none";
+                    }
+                }
+            }
+        }
+
+        window.onclick = function(event) {
+            var modal = document.getElementById("editModal");
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
         
     </script>
   </body>

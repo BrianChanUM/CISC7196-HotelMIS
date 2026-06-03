@@ -1,5 +1,10 @@
 <?php
-    session_start();
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    require_once __DIR__ . '/config/language.php';
+    require_once __DIR__ . '/function/check_permission.php';
+    requireModulePermission('admin_orders', 'index.php');
     $user = json_encode($_SESSION);
 ?>
 
@@ -55,11 +60,11 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
         <!-- Collect the nav links, forms, and other content for toggling -->
         
-        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1"> <?php include(__DIR__ . '/layout/header.php');?> <ul class="nav navbar-nav navbar-right" id="navbar"></ul> <?php include(__DIR__ . '/layout/navbar.php');?> </div>
+        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1"> <?php include(__DIR__ . '/layout/header.php');?> <ul class="nav navbar-nav navbar-right" id="navbar"></ul> <?php include(__DIR__ . '/layout/language_switcher.php');?> <?php include(__DIR__ . '/layout/navbar.php');?> </div>
         <!-- /.navbar-collapse -->
       </div>
       <!-- /.container-fluid -->
@@ -97,7 +102,7 @@
   <?php
           $servername = "localhost";
           $username = "root";
-          $password = "";
+          $password = "123456";
           $dbname = "hmis";
 
           // Create connection
@@ -108,8 +113,8 @@
               die("Connection failed: " . $conn->connect_error);
           }
 		  
-			$startDate = isset($_POST['startDate']) ? $_POST['startDate'] : '';
-			$endDate = isset($_POST['endDate']) ? $_POST['endDate'] : '';
+			$startDate = isset($_REQUEST['startDate']) ? $_REQUEST['startDate'] : '';
+			$endDate = isset($_REQUEST['endDate']) ? $_REQUEST['endDate'] : '';
 			$statuses = ['All', 'TBC', 'Confirmed', 'Canceled'];
 	
 
@@ -171,10 +176,42 @@
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST["orderId"]) && isset($_POST["status"])) {
         $orderId = $_POST["orderId"];
-        $status = $_POST["status"];
-        $date = date('Y-m-d H:i:s'); // Get the current date and time
+        $newStatus = $_POST["status"];
+        $date = date('Y-m-d H:i:s');
 
-        $sql = "UPDATE orderbookings SET Status='$status', OrderModifiedDate=NOW() WHERE OrderID=$orderId";
+        $getOrderSql = "SELECT OrderType, OrderRemark FROM orderbookings WHERE OrderID = $orderId";
+        $orderResult = $conn->query($getOrderSql);
+        
+        if ($orderResult && $orderRow = $orderResult->fetch_assoc()) {
+            $orderType = $orderRow['OrderType'];
+            $orderRemark = $orderRow['OrderRemark'];
+            
+            if ($newStatus == 'Canceled') {
+                if ($orderType == 'Hotel') {
+                    preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                    if (isset($matches[1])) {
+                        $roomType = trim($matches[1]);
+                        $restoreSql = "UPDATE hotelroomtype SET daily_quantity = daily_quantity + 1 WHERE HotelRoomtype = ?";
+                        $restoreStmt = $conn->prepare($restoreSql);
+                        $restoreStmt->bind_param("s", $roomType);
+                        $restoreStmt->execute();
+                        $restoreStmt->close();
+                    }
+                } elseif ($orderType == 'Limo') {
+                    preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                    if (isset($matches[1])) {
+                        $vehicleType = trim($matches[1]);
+                        $restoreSql = "UPDATE hotelvehicletype SET daily_quantity = daily_quantity + 1 WHERE VehicleType = ?";
+                        $restoreStmt = $conn->prepare($restoreSql);
+                        $restoreStmt->bind_param("s", $vehicleType);
+                        $restoreStmt->execute();
+                        $restoreStmt->close();
+                    }
+                }
+            }
+        }
+
+        $sql = "UPDATE orderbookings SET Status='$newStatus', OrderModifiedDate=NOW() WHERE OrderID=$orderId";
         if ($conn->query($sql) === TRUE) {
             echo "Status updated successfully";
         } else {
@@ -382,7 +419,7 @@ function searchTable() {
 // Database connection
 $servername = "localhost";
           $username = "root";
-          $password = "";
+          $password = "123456";
           $dbname = "hmis";
 
 // Create connection

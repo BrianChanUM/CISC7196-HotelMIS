@@ -1,4 +1,9 @@
-<!DOCTYPE html>
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/language.php';
+?><!DOCTYPE html>
 <html lang="en">
   <head>
     <!-- Basic Page Needs
@@ -51,24 +56,22 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
-        <!-- Collect the nav links, forms, and other content for toggling --><style>.paging{background-color:grey; color:black;}</style>
-<?php
-    session_start();
-    $user = json_encode($_SESSION);
-?>
+        <!-- Collect the nav links, forms, and other content for toggling -->
+        <?php
+            $user = json_encode($_SESSION);
+        ?>
 
-<div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-    <?php include(__DIR__ . '/layout/header.php');?>
-    <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
-	<?php include(__DIR__ . '/layout/navbar.php');?>
-
-	
-</div><!-- /.navbar-collapse -->
-      </div><!-- /.container-fluid -->
-    </nav>
+        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+            <?php include(__DIR__ . '/layout/header.php'); ?>
+            <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+            <?php include(__DIR__ . '/layout/navbar.php'); ?>
+            <?php include(__DIR__ . '/layout/language_switcher.php'); ?>
+        </div>
+    </div>
+</nav>
 
     <!-- Home Page
     ==========================================-->
@@ -324,7 +327,7 @@
 						<div id="slideshow-inner">
 							<ul>
 								<li id="slide1">
-									<img src="img/LimoLogo/1.jpg" />
+									<img src="img/limologo/1.jpg" />
 									<div class="description">
 										<input type="checkbox" id="show-description-1"/>
 										<label for="show-description-1" class="show-description-label">I</label>
@@ -335,7 +338,7 @@
 									</div>
 								</li>
 								<li id="slide2">
-									<img src="img/LimoLogo/2.jpg" />
+									<img src="img/limologo/2.jpg" />
 									<div class="description">
 										<input type="checkbox" id="show-description-2"/>
 										<label for="show-description-2" class="show-description-label">1</label>
@@ -346,7 +349,7 @@
 									</div>
 								</li>
 								<li id="slide3">
-									<img src="img/LimoLogo/3.jpg" />
+									<img src="img/limologo/3.jpg" />
 									<div class="description">
 										<input type="checkbox" id="show-description-3"/>
 										<label for="show-description-3" class="show-description-label">2</label>
@@ -357,7 +360,7 @@
 									</div>
 								</li>
 								<li id="slide4">
-									<img src="img/LimoLogo/4.jpg" />
+									<img src="img/limologo/4.jpg" />
 									<div class="description">
 										<input type="checkbox" id="show-description-4"/>
 										<label for="show-description-4" class="show-description-label">3</label>
@@ -368,7 +371,7 @@
 									</div>
 								</li>
 								<li id="slide5">
-									<img src="img/LimoLogo/5.jpg" />
+									<img src="img/limologo/5.jpg" />
 									<div class="description">
 										<input type="checkbox" id="show-description-5"/>
 										<label for="show-description-5" class="show-description-label">4</label>

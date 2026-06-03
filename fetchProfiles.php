@@ -2,6 +2,11 @@
     // Get the role from the request
     $role = $_GET['role'];
 
+    $servername = "localhost";
+    $username = "root";
+    $password = "123456";
+    $dbname = "hmis";
+
     // Create connection
     $conn = new mysqli($servername, $username, $password, $dbname);
 

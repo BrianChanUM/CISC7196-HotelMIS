@@ -1,4 +1,11 @@
-<!DOCTYPE html>
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/language.php';
+require_once __DIR__ . '/function/check_permission.php';
+requirePermission('admin_vehicles', 'create', 'index.php');
+?><!DOCTYPE html>
 <html lang="en">
   <head>
     <!-- Basic Page Needs
@@ -50,18 +57,18 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="index.php">HotelMIS </a>
+          <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
-        <!-- Collect the nav links, forms, and other content for toggling --><style>.paging{background-color:grey; color:black;}</style>
+        <!-- Collect the nav links, forms, and other content for toggling -->
 <?php
-    session_start();
     $user = json_encode($_SESSION);
 ?>
 
 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
     <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
+    <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	<?php include(__DIR__ . '/layout/navbar.php');?>
 
 	
@@ -88,7 +95,7 @@
                             <div class="clearfix"></div>
                         </div>
 						
-<form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]);?>"> 
+<form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]);?>" enctype="multipart/form-data"> 
    
 	<div class="row">
        
@@ -99,16 +106,33 @@
             <input type="text" class="form-control" id="VehicleType" name="VehicleType" placeholder="Vehicle Name"   required>
         </div>
     </div>
-		
-		
-		
+	
+	<div class="col-md-12">
+        <div class="form-group">
+            <label for="dailyQuantity">Daily Quantity (Number of vehicles):</label>
+            <input type="number" class="form-control" id="dailyQuantity" name="dailyQuantity" placeholder="Available vehicles per day" value="1" min="1" required>
+        </div>
+    </div>
+	
+	<div class="col-md-12">
+        <div class="form-group">
+            <label for="vehicleImage">Vehicle Image:</label>
+            <input type="file" class="form-control" id="vehicleImage" name="vehicleImage" accept="image/*">
+        </div>
+    </div>
+	
+	<div class="col-md-12">
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="status" value="1" checked> Enable this vehicle type
+            </label>
+        </div>
+    </div>
 		
 <div class="col-md-12">
                 <div class="form-group">
         <!-- Add other relevant fields here -->
 		<button type="submit" class="btn tf-btn btn-primary">Create New Car Type</button>
-		
-		
 		  </div>
             </div>
 		
@@ -147,8 +171,8 @@
 // Set your connection variables
 $servername = "localhost";
 $username = "root";
-$password = "";
-$dbname = "HMIS";
+$password = "123456";
+$dbname = "hmis";
 
 // Create a connection
 $conn = new mysqli($servername, $username, $password, $dbname);
@@ -161,6 +185,23 @@ if ($conn->connect_error) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Get form data (sanitize it!)
     $vehicleType = $conn->real_escape_string($_POST['VehicleType']); // Adjust field name as needed
+    $dailyQuantity = isset($_POST['dailyQuantity']) ? intval($_POST['dailyQuantity']) : 1;
+    $status = isset($_POST['status']) ? 1 : 0;
+    
+    $imagePath = '';
+    if (isset($_FILES['vehicleImage']) && $_FILES['vehicleImage']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = __DIR__ . '/img/limo/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+        
+        $fileName = basename($_FILES['vehicleImage']['name']);
+        $targetFilePath = $uploadDir . $fileName;
+        
+        if (move_uploaded_file($_FILES['vehicleImage']['tmp_name'], $targetFilePath)) {
+            $imagePath = 'img/limo/' . $fileName;
+        }
+    }
 
     // Check if the vehicle type already exists
     $existingVehicleQuery = "SELECT VehicleType FROM hotelvehicletype WHERE VehicleType = '$vehicleType'";
@@ -170,8 +211,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo "Sorry, that vehicle type already exists. Please double-check.";
     } else {
         // Insert into the appropriate table
-        $insertQuery = "INSERT INTO hotelvehicletype (VehicleType, status)
-                        VALUES ('$vehicleType', 1)"; // Adjust column names and values as needed
+        $insertQuery = "INSERT INTO hotelvehicletype (VehicleType, status, daily_quantity, image_path)
+                        VALUES ('$vehicleType', $status, $dailyQuantity, '$imagePath')";
 
         if ($conn->query($insertQuery) === TRUE) {
             echo "<script>alert('The Vehicle Type {$vehicleType} has been created successfully!');</script>";
