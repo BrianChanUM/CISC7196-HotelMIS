@@ -2,6 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/language.php';
 require_once __DIR__ . '/function/check_permission.php';
 requirePermission('admin_vehicles', 'create', 'index.php');
@@ -112,8 +113,9 @@ require_once __DIR__ . '/config/db_config.php';
 
 $conn = getDBConnection();
 
-$sql = "SELECT DISTINCT(VehicleType) FROM hotelvehicletype WHERE status = 1" ;
+$sql = "SELECT DISTINCT(VehicleType) FROM hotelvehicletype WHERE status = 1";
 $result = $conn->query($sql);
+$vehicleTypes = $result->fetchAll();
 ?>
 
 <div class="col-md-12">
@@ -122,13 +124,12 @@ $result = $conn->query($sql);
         <select class="form-control" id="luxurycars" name="luxurycars">
             <option value="">Select a Luxury Car</option>
             <?php
-            if ($result->num_rows > 0) {
-                // output data of each row
-                while($row = $result->fetch_assoc()) {
-                    echo "<option value=\"" . $row["VehicleType"] . "\">" . $row["VehicleType"] . "</option>";
+            if (count($vehicleTypes) > 0) {
+                foreach ($vehicleTypes as $row) {
+                    echo "<option value=\"" . htmlspecialchars($row["VehicleType"]) . "\">" . htmlspecialchars($row["VehicleType"]) . "</option>";
                 }
             } else {
-                echo "0 results";
+                echo "<option value=\"\">No vehicle types available</option>";
             }
             ?>
         </select>
@@ -179,32 +180,44 @@ $result = $conn->query($sql);
 <?php
 require_once __DIR__ . '/config/db_config.php';
 
-$conn = getDBConnection();
+$errorMessage = '';
+$successMessage = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Get form data (sanitize it!)
-    $vehicleType = $conn->real_escape_string($_POST['luxurycars']); // Adjust field name as needed
-    $vehicleNo = $conn->real_escape_string($_POST['VehicleNo']); // Adjust field name as needed
+    $vehicleType = trim($_POST['luxurycars']);
+    $vehicleNo = trim($_POST['VehicleNo']);
 
-    // Check if the vehicle number (plate) already exists
-    $existingVehicleQuery = "SELECT VehiclePlate FROM hotelvehicle WHERE VehiclePlate = '$vehicleNo'";
-    $result = $conn->query($existingVehicleQuery);
-
-if ($result->num_rows > 0) {
-    echo "<script>alert('Sorry, a vehicle with the same plate number already exists. Please double-check.');</script>";
-} else {
-    // Insert into the appropriate table
-    $insertQuery = "INSERT INTO hotelvehicle (VehicleType, VehiclePlate)
-                    VALUES ('$vehicleType', '$vehicleNo')"; // Adjust column names as needed
-
-    if ($conn->query($insertQuery) === TRUE) {
-        echo "<script>alert('The Vehicle Type {$vehicleType} with plate number {$vehicleNo} has been created successfully!');</script>";
+    if (empty($vehicleType)) {
+        $errorMessage = "Vehicle type is required.";
+    } elseif (empty($vehicleNo)) {
+        $errorMessage = "Vehicle number is required.";
     } else {
-        echo "Error: " . $insertQuery . "<br>" . $conn->error;
+        $conn = getDBConnection();
+
+        $existingVehicleQuery = $conn->prepare("SELECT VehiclePlate FROM hotelvehicle WHERE VehiclePlate = ?");
+        $existingVehicleQuery->execute([$vehicleNo]);
+
+        if ($existingVehicleQuery->rowCount() > 0) {
+            $errorMessage = "Sorry, a vehicle with the same plate number already exists. Please double-check.";
+        } else {
+            $insertQuery = $conn->prepare("INSERT INTO hotelvehicle (VehicleType, VehiclePlate) VALUES (?, ?)");
+            $insertQuery->execute([$vehicleType, $vehicleNo]);
+
+            if ($insertQuery->rowCount() > 0) {
+                $successMessage = "The Vehicle Type " . htmlspecialchars($vehicleType) . " with plate number " . htmlspecialchars($vehicleNo) . " has been created successfully!";
+            } else {
+                $errorMessage = "Error creating vehicle.";
+            }
+        }
+
+        closeDBConnection($conn);
+    }
+
+    if ($errorMessage) {
+        echo "<script>alert('" . addslashes($errorMessage) . "');</script>";
+    }
+    if ($successMessage) {
+        echo "<script>alert('" . addslashes($successMessage) . "'); window.location.href = 'addvehicle.php';</script>";
     }
 }
-}
-
-// Close the connection
-$conn->close();
 ?>

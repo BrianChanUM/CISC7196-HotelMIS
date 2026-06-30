@@ -2,7 +2,9 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/language.php';
+require_once __DIR__ . '/config/db_config.php';
 
 function checkPermission($module, $permissionType) {
     if (!isset($_SESSION['permissions'])) {
@@ -27,36 +29,121 @@ if (!isset($_SESSION['username'])) {
         }
     }
 }
-?><!DOCTYPE html>
+
+$checkinDate = date('Y-m-d');
+$checkoutDate = date('Y-m-d', strtotime('+1 day'));
+
+// 创建booking_token防止重复提交
+if (!isset($_SESSION['ird_booking_token'])) {
+    $_SESSION['ird_booking_token'] = md5(uniqid(rand(), true));
+}
+
+$conn = getDBConnection();
+$sql = "SELECT DISTINCT OutletName FROM hoteloutlet WHERE status = 1 AND Style = 'IRD'";
+$result = $conn->query($sql);
+$outlets = [];
+while ($row = $result->fetch()) {
+    $outlets[] = $row['OutletName'];
+}
+
+// 废弃的直接支付回调代码 - 已迁移到payment_simulation.php统一处理
+// 所有预订必须通过payment_simulation.php完成容量检查和扣减
+// 此代码块已注释，因为：
+// 1. 完全没有容量检查，可能导致超额预订
+// 2. payment_simulation.php已经有完整的事务处理和库存扣减逻辑
+/*
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['action'] == 'ird_payment_return') {
+    // 已废弃：使用payment_simulation.php代替
+    die('This payment method is deprecated. Please use the standard booking flow.');
+}
+*/
+
+// 创建待支付订单并跳转到支付页面
+if ($_SERVER["REQUEST_METHOD"] == "POST" && !empty($_POST['email']) && !empty($_POST['ird_booking_token']) && $_POST['ird_booking_token'] === $_SESSION['ird_booking_token'] && !isset($_POST['action'])) {
+    // 更新booking_token防止重复提交
+    $_SESSION['ird_booking_token'] = md5(uniqid(rand(), true));
+    
+    require_once __DIR__ . '/function/create_pending_order.php';
+    
+    $bookingDate = isset($_POST['bookingDate']) ? $_POST['bookingDate'] : '';
+    $bookingTime = isset($_POST['bookingTime']) ? $_POST['bookingTime'] : '';
+    $outletName = isset($_POST['outlet']) ? $_POST['outlet'] : '';
+    $datetime = new DateTime($bookingDate . ' ' . $bookingTime);
+    $time = $datetime->format('Y-m-d H:i:s');
+    $email = $_POST['email'];
+    $phone = $_POST['phone'];
+    $orderremark = $outletName . ' | ' . (isset($_POST['comment']) ? $_POST['comment'] : '');
+    $noofguest = isset($_POST['guests']) ? intval($_POST['guests']) : 1;
+    
+    // 检查容量
+    require_once __DIR__ . '/config/db_config.php';
+    $conn = getDBConnection();
+    $checkCapacity = $conn->prepare("SELECT capacity FROM hoteloutlet WHERE OutletName = ?");
+    $checkCapacity->execute([$outletName]);
+    $capacityRow = $checkCapacity->fetch();
+    
+    $availableSeats = 0;
+    if ($capacityRow) {
+        $totalCapacity = $capacityRow['capacity'];
+        $remarkPattern = '%' . $outletName . '%';
+        $bookedQuery = $conn->prepare("SELECT SUM(NoofGuest) as booked FROM orderbookings 
+            WHERE OrderType = 'IRD' AND OrderRemark LIKE ? AND Status IN ('TBC', 'Confirmed') 
+            AND DATE(OrderCreatedDate) = ?");
+        $bookedQuery->execute([$remarkPattern, $bookingDate]);
+        $bookedRow = $bookedQuery->fetch();
+        $bookedSeats = $bookedRow['booked'] ? $bookedRow['booked'] : 0;
+        $availableSeats = $totalCapacity - $bookedSeats;
+        
+        if ($availableSeats < $noofguest) {
+            closeDBConnection($conn);
+            $errorMessage = "Sorry, only " . $availableSeats . " slots available";
+            header("Location: bookedIRD.php?error=1");
+            exit();
+        }
+    }
+    closeDBConnection($conn);
+    
+    // 根据memory规则：IRD默认价格$30每人
+    $price = 30 * $noofguest;
+    
+    // 创建待支付订单
+    createPendingOrder([
+        'OrderType' => 'IRD',
+        'Time' => $time,
+        'ContactNo' => $phone,
+        'Email' => $email,
+        'OrderRemark' => $orderremark,
+        'NoofGuest' => $noofguest,
+        'Amount' => $price,
+        'outlet_name' => $outletName  // 新增：餐厅网点名称，用于payment_simulation库存扣减
+    ]);
+    
+    header("Location: payment_simulation.php");
+    exit();
+}
+
+closeDBConnection($conn);
+?>
+<!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- Basic Page Needs
-    ================================================== -->
     <meta charset="utf-8">
-    <!--[if IE]><meta http-equiv="x-ua-compatible" content="IE=9" /><![endif]-->
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CISC7196-HotelMIS-2023OCT18</title>
     
-    <!-- Favicons
-    ================================================== -->
     <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon">
     <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
     <link rel="apple-touch-icon" sizes="72x72" href="img/apple-touch-icon-72x72.png">
     <link rel="apple-touch-icon" sizes="114x114" href="img/apple-touch-icon-114x114.png">
 
-    <!-- Bootstrap -->
-    <link rel="stylesheet" type="text/css"  href="css/bootstrap.css">
-	<link rel="stylesheet" type="text/css"  href="css/bookedIRD.css">
+    <link rel="stylesheet" type="text/css" href="css/bootstrap.css">
+	<link rel="stylesheet" type="text/css" href="css/bookedIRD.css">
     <link rel="stylesheet" type="text/css" href="fonts/font-awesome/css/font-awesome.css">
 
-    <!-- Slider
-    ================================================== -->
     <link href="css/owl.carousel.css" rel="stylesheet" media="screen">
     <link href="css/owl.theme.css" rel="stylesheet" media="screen">
-	  <!--<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Stylesheet
-    ================================================== -->
-    <link rel="stylesheet" type="text/css"  href="css/style.css">
+
+    <link rel="stylesheet" type="text/css" href="css/style.css">
     <link rel="stylesheet" type="text/css" href="css/responsive.css">
 
     <link href='http://fonts.googleapis.com/css?family=Lato:100,300,400,700,900,100italic,300italic,400italic,700italic,900italic' rel='stylesheet' type='text/css'>
@@ -66,11 +153,8 @@ if (!isset($_SESSION['username'])) {
 
   </head>
   <body>
-    <!-- Navigation
-    ==========================================-->
     <nav id="tf-menu" class="navbar navbar-default navbar-fixed-top">
       <div class="container">
-        <!-- Brand and toggle get grouped for better mobile display -->
         <div class="navbar-header">
           <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
             <span class="sr-only">Toggle navigation</span>
@@ -81,33 +165,20 @@ if (!isset($_SESSION['username'])) {
           <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
         </div>
 
-        <!-- Collect the nav links, forms, and other content for toggling -->
 <?php
     $user = json_encode($_SESSION);
-    
-    $checkinDate = date('Y-m-d');
-    $checkoutDate = date('Y-m-d', strtotime('+1 day'));
 ?>
-
-
-
 
 <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
     <?php include(__DIR__ . '/layout/header.php');?>
     <ul class="nav navbar-nav navbar-right" id="navbar"></ul>
     <?php include(__DIR__ . '/layout/language_switcher.php');?>
 	<?php include(__DIR__ . '/layout/navbar.php');?>
-
-	
-</div><!-- /.navbar-collapse -->
-      </div><!-- /.container-fluid -->
+</div>
+      </div>
     </nav>
-
-    <!-- Home Page
-    ==========================================-->
     <div id="tf-home" class="text-center">
-	<a href="#tf-contact" ></a>
-       
+	<a href="#tf-contact"></a>
     </div>
 	
 	<div id="tf-about">
@@ -134,7 +205,6 @@ if (!isset($_SESSION['username'])) {
 									<div class="description">
 										<input type="checkbox" id="show-description-1"/>
 										<label for="show-description-1" class="show-description-label">I</label>
-									
 									</div>
 								</li>
 								<li id="slide2">
@@ -142,7 +212,6 @@ if (!isset($_SESSION['username'])) {
 									<div class="description">
 										<input type="checkbox" id="show-description-2"/>
 										<label for="show-description-2" class="show-description-label">1</label>
-										
 									</div>
 								</li>
 								<li id="slide3">
@@ -150,7 +219,6 @@ if (!isset($_SESSION['username'])) {
 									<div class="description">
 										<input type="checkbox" id="show-description-3"/>
 										<label for="show-description-3" class="show-description-label">2</label>
-										
 									</div>
 								</li>
 								<li id="slide4">
@@ -158,7 +226,6 @@ if (!isset($_SESSION['username'])) {
 									<div class="description">
 										<input type="checkbox" id="show-description-4"/>
 										<label for="show-description-4" class="show-description-label">3</label>
-										
 									</div>
 								</li>
 								<li id="slide5">
@@ -166,9 +233,7 @@ if (!isset($_SESSION['username'])) {
 									<div class="description">
 										<input type="checkbox" id="show-description-5"/>
 										<label for="show-description-5" class="show-description-label">4</label>
-										
 									</div>
-									
 								</li>
 							</ul>
 						</div>
@@ -181,12 +246,18 @@ if (!isset($_SESSION['username'])) {
         <div class="clearfix"></div>
     </div>
     <form action="bookedIRD.php" method="post">
+        <input type="hidden" name="ird_booking_token" value="<?php echo $_SESSION['ird_booking_token']; ?>">
         <div class="row">
-            <!-- User details -->
             <div class="col-md-12">
                 <div class="form-group">
                     <label for="email">Username/Email address</label>
-                    <input type="text" class="form-control" id="email" name="email" placeholder="Username/Email" required>
+                    <input type="text" class="form-control" id="email" name="email" 
+                        <?php if (isset($_SESSION['email']) && !empty($_SESSION['email'])): ?>
+                            value="<?php echo htmlspecialchars($_SESSION['email']); ?>" readonly
+                        <?php else: ?>
+                            placeholder="Username/Email"
+                        <?php endif; ?>
+                        required>
                 </div>
             </div>
             <div class="col-md-12">
@@ -195,42 +266,14 @@ if (!isset($_SESSION['username'])) {
                     <input type="text" class="form-control" id="phone" name="phone" placeholder="Phone Number" required>
                 </div>
             </div>
-            <!-- F&B Outlet selection -->
-			
-<?php
-$servername = "localhost";
-$username = "root";
-$password = "123456";
-$dbname = "hmis";
-
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check connection
-if ($conn->connect_error) {
-  die("Connection failed: " . $conn->connect_error);
-}
-
-$sql = "SELECT DISTINCT(OutletName) FROM hoteloutlet WHERE STATUS = 1 and style = 'IRD'"  ;
-$result = $conn->query($sql);
-?>			
-			
-			
             <div class="col-md-12">
                 <div class="form-group">
                     <label for="outlet">Service Type</label>
                     <select class="form-control" id="outlet" name="outlet">
-					<option value="">Select a Room Service Type</option>
-                        <?php
-            if ($result->num_rows > 0) {
-                // output data of each row
-                while($row = $result->fetch_assoc()) {
-                    echo "<option value=\"" . $row["OutletName"] . "\">" . $row["OutletName"] . "</option>";
-                }
-            } else {
-                echo "0 results";
-            }
-            ?>
+						<option value="">Select a Room Service Type</option>
+                        <?php foreach ($outlets as $outlet): ?>
+                        <option value="<?php echo htmlspecialchars($outlet); ?>"><?php echo htmlspecialchars($outlet); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
             </div>
@@ -250,17 +293,14 @@ $result = $conn->query($sql);
 </div>
 
 <datalist id="time-slots">
-    <!-- Time slots will be added here by JavaScript -->
 </datalist>
 
-            <!-- Number of guests -->
             <div class="col-md-12">
                 <div class="form-group">
                     <label for="guests">Number of Guests</label>
                     <input type="number" class="form-control" id="guests" name="guests" min="1" max="10">
                 </div>
             </div>
-            <!-- Additional comments -->
             <div class="col-md-12">
                 <div class="form-group">
                     <label for="comment">Special Request</label>
@@ -278,9 +318,8 @@ $result = $conn->query($sql);
     </div>
 <?php endif; ?>
 			<div id="myModal" class="modal">
-  <!-- Modal content -->
   <div class="modal-content">
-	<img src="img/ird/logo.png" alt="Logo" style="width:100px; height:auto;"> <!-- Add this line -->
+	<img src="img/ird/logo.png" alt="Logo" style="width:100px; height:auto;">
     <span class="close">&times;</span>
     <p id="modalText">Your reservation is confirmed.</p>
   </div>
@@ -290,63 +329,47 @@ $result = $conn->query($sql);
         </div>
     </div>
 
-
   <?php include(__DIR__ . '/layout/footer.php');?>
 
-    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
     <script type="text/javascript" src="js/jquery.1.11.1.js"></script>
-    <!-- Include all compiled plugins (below), or include individual files as needed -->
     <script type="text/javascript" src="js/bootstrap.js"></script>
     <script type="text/javascript" src="js/SmoothScroll.js"></script>
     <script type="text/javascript" src="js/jquery.isotope.js"></script>
     <script src="js/owl.carousel.js"></script>
-
-    <!-- Javascripts
-    ================================================== -->
     <script type="text/javascript" src="js/main.js"></script>
     <script src="js/cart.js"></script>
 
 <script>
-    // Start and end times (24 hour clock)
     var startTime = 06;
     var endTime = 9;
 	var today = new Date().toISOString().split('T')[0];
     document.getElementById('bookingDate').setAttribute('min', today);
 
-    // Get the datalist element
     var datalist = document.getElementById('time-slots');
 
-    // Loop over the times and add them as options
     for (var i = startTime; i <= endTime; i++) {
-        // Create the options for on the hour and 30 minutes past the hour
         var option1 = document.createElement('option');
         var option2 = document.createElement('option');
         option1.value = (i < 10 ? '0' : '') + i + ':00';
         option2.value = (i < 10 ? '0' : '') + i + ':30';
 
-        // Add the options to the datalist element
         datalist.appendChild(option1);
         datalist.appendChild(option2);
     }
 	
-	// Get the modal
-var modal = document.getElementById("myModal");
+	var modal = document.getElementById("myModal");
+	var span = document.getElementsByClassName("close")[0];
 
-// Get the <span> element that closes the modal
-var span = document.getElementsByClassName("close")[0];
+	span.onclick = function() {
+	  modal.style.display = "none";
+	}
 
-// When the user clicks on <span> (x), close the modal
-span.onclick = function() {
-  modal.style.display = "none";
-}
-
-// When the user clicks anywhere outside of the modal, close it
-window.onclick = function(event) {
-  if (event.target == modal) {
-    modal.style.display = "none";
-  }
-}
+	window.onclick = function(event) {
+	  if (event.target == modal) {
+		modal.style.display = "none";
+	  }
+	}
 	
 	var checkinDate = "<?php echo htmlspecialchars($checkinDate); ?>";
 	var checkoutDate = "<?php echo htmlspecialchars($checkoutDate); ?>";
@@ -374,127 +397,67 @@ window.onclick = function(event) {
 		var outlet = $('#outlet').val();
 		var date = $('#bookingDate').val();
 		var time = $('#bookingTime').val();
-		var guests = $('#guests').val() || 1;
+		var guests = parseInt($('#guests').val() || 1);
 		var comment = $('#comment').val() || '';
-		
+
 		if (!outlet) {
 			alert('Please select a service type');
 			return;
 		}
-		
+
 		if (!date) {
 			alert('Please select a date');
 			return;
 		}
-		
+
 		if (!time) {
 			alert('Please select a time');
 			return;
 		}
-		
-		var itemType = 'IRD';
-		var itemName = outlet;
-		var itemPrice = 0;
-		var itemDetails = 'Guests: ' + guests + ', Time: ' + time + (comment ? ', Notes: ' + comment : '');
-		
-		addToCart(itemType, itemName, itemPrice, date, time, guests, itemDetails);
+
+		// Check capacity before adding to cart
+		$.ajax({
+			url: 'function/check_outlet_capacity.php',
+			type: 'POST',
+			data: { outlet_name: outlet, guests: guests },
+			dataType: 'json',  // 告诉jQuery期望返回JSON格式
+			success: function(result) {
+				// jQuery已经自动解析了JSON，result已经是对象
+				if (result.success) {
+					if (result.capacity >= guests) {
+						var itemType = 'IRD';
+						var itemName = outlet;
+						var itemPrice = 30 * guests;  // 根据memory规则：默认$30每人
+						var itemDetails = 'Guests: ' + guests + ', Time: ' + time + (comment ? ', Notes: ' + comment : '');
+						addToCart(itemType, itemName, itemPrice, date, time, guests, itemDetails);
+					} else {
+						alert('Not enough capacity. Available: ' + result.capacity + ', Required: ' + guests);
+					}
+				} else {
+					alert(result.message || 'Failed to check capacity');
+				}
+			},
+			error: function() {
+				alert('Error checking capacity. Please try again.');
+			}
+		});
 	});
-	
 </script>
+
+<?php if (isset($successMessage)): ?>
+<script type='text/javascript'>
+    var modal = document.getElementById('myModal');
+    var modalText = document.getElementById('modalText');
+    modalText.innerHTML = '<?php echo $successMessage; ?>';
+    modal.style.display = 'block';
+</script>
+<?php endif; ?>
+
+<?php if (isset($errorMessage)): ?>
+<script type='text/javascript'>
+    alert('<?php echo $errorMessage; ?>');
+</script>
+<?php endif; ?>
 
   </body>
 </html>
-
-	<?php
-$servername = "localhost";
-$username = "root";
-$password = "123456";
-$dbname = "hmis";
-
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check connection
-if ($conn->connect_error) {
-  die("Connection failed: " . $conn->connect_error);
-}
-
-// Prepare and bind
-$stmt = $conn->prepare("INSERT INTO orderbookings (OrderType,Time,ContactNo, Email, OrderRemark, Status, OrderCreatedDate, OrderModifiedDate, NoofGuest) VALUES (?, ?,?, ?, ?, ?, ?, ?, ?)");
-$stmt->bind_param("ssssssssi", $ordertype, $time, $phone, $email, $orderremark, $status, $ordercreateddate, $ordermodifieddate, $noofguest);
-
-date_default_timezone_set('Asia/Shanghai');
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-// Set parameters and execute
-$ordertype = "IRD";
-
-// Retrieve the date and time from the form
-$bookingDate = $_POST['bookingDate'];
-$bookingTime = $_POST['bookingTime'];
-$outletName = $_POST['outlet'];
-
-// Combine the date and time into a single DateTime object
-$datetime = new DateTime($bookingDate . ' ' . $bookingTime);
-
-// Format the DateTime object as a string in the 'Y-m-d H:i:s' format
-$time = $datetime->format('Y-m-d H:i:s');
-
-$email = $_POST['email'];
-$phone = $_POST['phone'];
-$orderremark = $outletName . ' | ' . $_POST['comment'];
-$status = "TBC";
-$ordercreateddate = date('Y-m-d H:i:s'); // Use date function instead of now()
-$ordermodifieddate = date('Y-m-d H:i:s');
-
-// Retrieve the number of guests from the form
-$noofguest = $_POST['guests'];
-
-$checkCapacity = $conn->prepare("SELECT capacity FROM hoteloutlet WHERE OutletName = ?");
-$checkCapacity->bind_param("s", $outletName);
-$checkCapacity->execute();
-$capacityResult = $checkCapacity->get_result();
-
-if ($capacityResult->num_rows > 0) {
-    $capacityRow = $capacityResult->fetch_assoc();
-    $totalCapacity = $capacityRow['capacity'];
-    
-    $bookedQuery = $conn->prepare("SELECT SUM(NoofGuest) as booked FROM orderbookings 
-        WHERE OrderType = 'IRD' AND OrderRemark LIKE ? AND Status IN ('TBC', 'Confirmed') 
-        AND DATE(OrderCreatedDate) = ?");
-    $remarkPattern = '%' . $outletName . '%';
-    $bookedQuery->bind_param("ss", $remarkPattern, $bookingDate);
-    $bookedQuery->execute();
-    $bookedResult = $bookedQuery->get_result();
-    $bookedRow = $bookedResult->fetch_assoc();
-    $bookedSeats = $bookedRow['booked'] ? $bookedRow['booked'] : 0;
-    
-    $availableSeats = $totalCapacity - $bookedSeats;
-    
-    if ($availableSeats < $noofguest) {
-        echo "<script type='text/javascript'>alert('Sorry, only " . $availableSeats . " slots available for " . $outletName . "');</script>";
-        $checkCapacity->close();
-        $conn->close();
-    }
-}
-
-if ($stmt->execute()) {
-    $last_id = $conn->insert_id; // Get the last inserted ID
-    echo "
-    <script type='text/javascript'>
-        var modal = document.getElementById('myModal');
-        var modalText = document.getElementById('modalText');
-        modalText.innerHTML = 'Your order has been well receieved. <br><b>Your order ID is: IRD " . $last_id . "</b>.<br>ContactNo. " . $phone . "</br>No. of Guests: " . $noofguest . "<br>Expected Delivery date  " . $time . "';
-        modal.style.display = 'block'; // Show the modal
-    </script>
-    ";
-} else {
-    echo "<script type='text/javascript'>alert('There was an error');</script>";
-}
-}
-
-$stmt->close();
-$conn->close();
-?>
-	
-	
