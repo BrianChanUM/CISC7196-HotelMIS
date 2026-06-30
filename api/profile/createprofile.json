@@ -1,0 +1,14 @@
+<CreateProfileRequest xmlns="http://webservices.micros.com/ows/5.1/Profile.wsdl">
+
+  <Profile>
+    <Customer>
+      <PersonName>
+        <GivenName>John</GivenName>
+        <Surname>Doe</Surname>
+      </PersonName>
+      <Telephone>123456789</Telephone>
+      <Email>john@example.com</Email>
+    </Customer>
+  </Profile>
+
+</CreateProfileRequest>

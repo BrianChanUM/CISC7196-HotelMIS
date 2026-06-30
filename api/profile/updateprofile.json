@@ -1,0 +1,11 @@
+<UpdateProfileRequest xmlns="http://webservices.micros.com/ows/5.1/Profile.wsdl">
+
+  <ProfileID>12345</ProfileID>
+
+  <Profile>
+    <Customer>
+      <Email>newemail@example.com</Email>
+    </Customer>
+  </Profile>
+
+</UpdateProfileRequest>

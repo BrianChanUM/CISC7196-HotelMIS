@@ -1,0 +1,16 @@
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Header>...</soap:Header>
+  <soap:Body>
+    <ModifyBookingRequest xmlns="http://webservices.micros.com/ows/5.1/Reservation.wsdl">
+      
+      <HotelReference chainCode="WC" hotelCode="SEFIVE"/>
+
+      <UniqueID ID="4625769" Type="INTERNAL"/>
+
+      <RoomStay>
+        <TimeSpan start="2026-07-02" end="2026-07-05"/>
+      </RoomStay>
+
+    </ModifyBookingRequest>
+  </soap:Body>
+</soap:Envelope>

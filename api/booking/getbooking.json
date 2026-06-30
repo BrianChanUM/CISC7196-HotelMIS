@@ -1,0 +1,14 @@
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Header>...</soap:Header>
+  <soap:Body>
+    <GetBookingRequest xmlns="http://webservices.micros.com/ows/5.1/Reservation.wsdl">
+
+      <HotelReference chainCode="WC" hotelCode="SEFIVE"/>
+
+      <SelectionCriteria>
+        <ConfirmationNumber type="INTERNAL">4625769</ConfirmationNumber>
+      </SelectionCriteria>
+
+    </GetBookingRequest>
+  </soap:Body>
+</soap:Envelope>

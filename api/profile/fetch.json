@@ -1,0 +1,10 @@
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Header>...</soap:Header>
+  <soap:Body>
+    <FetchProfileRequest xmlns="http://webservices.micros.com/ows/5.1/Profile.wsdl">
+
+      <ProfileID>12345</ProfileID>
+
+    </FetchProfileRequest>
+  </soap:Body>
+</soap:Envelope>
