@@ -2,9 +2,51 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/language.php';
 require_once __DIR__ . '/function/check_permission.php';
+require_once __DIR__ . '/config/db_config.php';
 requirePermission('admin_rooms', 'create', 'index.php');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $conn = getDBConnection();
+    
+    $roomType = isset($_POST['HotelRoomtype']) ? $_POST['HotelRoomtype'] : '';
+    $roomPrice = isset($_POST['HotelRoomPrice']) ? $_POST['HotelRoomPrice'] : '';
+    $dailyQuantity = isset($_POST['dailyQuantity']) ? intval($_POST['dailyQuantity']) : 1;
+    $status = isset($_POST['status']) ? 1 : 0;
+    
+    $imagePath = '';
+    if (isset($_FILES['roomImage']) && $_FILES['roomImage']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = __DIR__ . '/img/hotel/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+        
+        $fileName = basename($_FILES['roomImage']['name']);
+        $targetFilePath = $uploadDir . $fileName;
+        
+        if (move_uploaded_file($_FILES['roomImage']['tmp_name'], $targetFilePath)) {
+            $imagePath = 'img/hotel/' . $fileName;
+        }
+    }
+
+    $checkStmt = $conn->prepare("SELECT HotelRoomtype FROM hotelroomtype WHERE HotelRoomtype = ?");
+    $checkStmt->execute([$roomType]);
+    
+    if ($checkStmt->rowCount() > 0) {
+        $errorMessage = "Sorry, that room type already exists. Please double-check.";
+    } else {
+        $insertStmt = $conn->prepare("INSERT INTO hotelroomtype (HotelRoomtype, HotelRoomPrice, daily_quantity, image_path, status) VALUES (?, ?, ?, ?, ?)");
+        if ($insertStmt->execute([$roomType, $roomPrice, $dailyQuantity, $imagePath, $status])) {
+            $successMessage = "The RoomType " . htmlspecialchars($roomType) . " has been created successfully!";
+        } else {
+            $errorMessage = "Error creating room type.";
+        }
+    }
+    
+    closeDBConnection($conn);
+}
 ?><!DOCTYPE html>
 <html lang="en">
   <head>
@@ -99,7 +141,7 @@ requirePermission('admin_rooms', 'create', 'index.php');
    
 	<div class="row">
        
-		
+
 		 <div class="col-md-12">
         <div class="form-group">
             <label for="HotelRoomtype">Room Type:</label>
@@ -141,8 +183,8 @@ requirePermission('admin_rooms', 'create', 'index.php');
         <!-- Add other relevant fields here -->
 		<button type="submit" class="btn tf-btn btn-primary">Create New Room Type</button>
 		
-		
-		  </div>
+		  
+          </div>
             </div>
 		
 		
@@ -177,64 +219,11 @@ requirePermission('admin_rooms', 'create', 'index.php');
 </html>
 
 <?php
-// Set your connection variables
-$servername = "localhost";
-$username = "root";
-$password = "123456";
-$dbname = "hmis";
-
-// Create a connection
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check the connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+if (isset($successMessage)) {
+    echo "<script>alert('" . $successMessage . "');</script>";
 }
 
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Get form data
-    $roomType = $_POST['HotelRoomtype'];
-    $roomPrice = $_POST['HotelRoomPrice'];
-    $dailyQuantity = isset($_POST['dailyQuantity']) ? intval($_POST['dailyQuantity']) : 1;
-    $status = isset($_POST['status']) ? 1 : 0;
-    
-    $imagePath = '';
-    if (isset($_FILES['roomImage']) && $_FILES['roomImage']['error'] === UPLOAD_ERR_OK) {
-        $uploadDir = __DIR__ . '/img/hotel/';
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-        
-        $fileName = basename($_FILES['roomImage']['name']);
-        $targetFilePath = $uploadDir . $fileName;
-        
-        if (move_uploaded_file($_FILES['roomImage']['tmp_name'], $targetFilePath)) {
-            $imagePath = 'img/hotel/' . $fileName;
-        }
-    }
-
-    // Check if the room type already exists
-    $existingRoomQuery = "SELECT HotelRoomtype FROM hotelroomtype WHERE HotelRoomtype = '$roomType'";
-    $result = $conn->query($existingRoomQuery);
-
-    if ($result->num_rows > 0) {
-        echo "Sorry, that room type already exists. Please double-check.";
-    } else {
-        // Insert into the appropriate table
-        $insertQuery = "INSERT INTO hotelroomtype (HotelRoomtype, HotelRoomPrice, daily_quantity, image_path, status)
-                        VALUES ('$roomType', $roomPrice, $dailyQuantity, '$imagePath', $status)";
-
-
-            if ($conn->query($insertQuery) === TRUE) {
-                echo "<script>alert('The RoomType " . $roomType . " has been created successfully!');</script>";
-            } else {
-                echo "Error: " . $insertQuery . "<br>" . $conn->error;
-            }
-        }
-    }
-
-
-// Close the connection
-$conn->close();
+if (isset($errorMessage)) {
+    echo "<script>alert('" . $errorMessage . "');</script>";
+}
 ?>

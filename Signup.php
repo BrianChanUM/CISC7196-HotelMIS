@@ -9,16 +9,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $conn = getDBConnection();
 
-    $stmt = $conn->prepare("INSERT INTO user (UserName, Email, Password, Role) VALUES (?, ?, ?, 'User')");
-    $stmt->bind_param("sss", $loginID, $email, $pass);
+    $checkStmt = $conn->prepare("SELECT UID FROM user WHERE UserName = ?");
+    $checkStmt->execute([$loginID]);
+    if ($checkStmt->rowCount() > 0) {
+        echo "<script type='text/javascript'>alert('Username already exists, please choose another username'); window.location.href = 'Signup.php';</script>";
+        closeDBConnection($conn);
+        exit();
+    }
 
-    if ($stmt->execute() === TRUE) {
+    $checkEmailStmt = $conn->prepare("SELECT UID FROM user WHERE Email = ?");
+    $checkEmailStmt->execute([$email]);
+    if ($checkEmailStmt->rowCount() > 0) {
+        echo "<script type='text/javascript'>alert('Email has already been registered, please use another email'); window.location.href = 'Signup.php';</script>";
+        closeDBConnection($conn);
+        exit();
+    }
+
+    $hashedPass = password_hash($pass, PASSWORD_DEFAULT);
+
+    $stmt = $conn->prepare("INSERT INTO user (UserName, Email, Password, Role) VALUES (?, ?, ?, 'guest')");
+    $stmt->execute([$loginID, $email, $hashedPass]);
+
+    if ($stmt->rowCount() > 0) {
         echo "<script type='text/javascript'>alert('" . t('signup_success') . "'); window.location.href = 'login.php';</script>";
     } else {
         echo "<script type='text/javascript'>alert('" . t('signup_error') . "'); window.location.href = 'Signup.php';</script>";
     }
 
-    $stmt->close();
     closeDBConnection($conn);
 }
 ?>
@@ -99,8 +116,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <input type="checkbox" id="show-description-1"/>
                                         <label for="show-description-1" class="show-description-label">I</label>
                                         <div class="description-text">
-                                            <h2>优雅一瞥</h2>
-                                            <p>我们提供最舒适的宁静与安心</p>
+                                            <h2>Elegant Glimpse</h2>
+                                            <p>We provide the most comfortable tranquility and peace of mind</p>
                                         </div>
                                     </div>
                                 </li>
@@ -110,8 +127,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <input type="checkbox" id="show-description-2"/>
                                         <label for="show-description-2" class="show-description-label">1</label>
                                         <div class="description-text">
-                                            <h2>豪华客房</h2>
-                                            <p>这些房间专为您的舒适体验而设计</p>
+                                            <h2>Luxury Rooms</h2>
+                                            <p>These rooms are designed specifically for your comfort</p>
                                         </div>
                                     </div>
                                 </li>
@@ -121,8 +138,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <input type="checkbox" id="show-description-3"/>
                                         <label for="show-description-3" class="show-description-label">2</label>
                                         <div class="description-text">
-                                            <h2>贵宾房</h2>
-                                            <p>这些房间体现您的品味与身份</p>
+                                            <h2>VIP Rooms</h2>
+                                            <p>These rooms reflect your taste and identity</p>
                                         </div>
                                     </div>
                                 </li>
@@ -132,8 +149,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <input type="checkbox" id="show-description-4"/>
                                         <label for="show-description-4" class="show-description-label">3</label>
                                         <div class="description-text">
-                                            <h2>精品客房</h2>
-                                            <p>我们提供各种价位的房间让您享受美好时光</p>
+                                            <h2>Deluxe Rooms</h2>
+                                            <p>We offer rooms at various price ranges for your enjoyment</p>
                                         </div>
                                     </div>
                                 </li>
@@ -143,8 +160,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <input type="checkbox" id="show-description-5"/>
                                         <label for="show-description-5" class="show-description-label">4</label>
                                         <div class="description-text">
-                                            <h2>豪华套房</h2>
-                                            <p>我们按国际标准设计房间，为客户提供优质服务</p>
+                                            <h2>Luxury Suites</h2>
+                                            <p>Our rooms are designed to international standards for premium service</p>
                                         </div>
                                     </div>
                                 </li>
@@ -162,42 +179,42 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <div class="row">
                             <div class="col-md-12">
                                 <div class="form-group">
-                                    <label for="adminEmployeeID">登录ID</label>
+                                    <label for="adminEmployeeID">Login ID</label>
                                     <input type="text" class="form-control" id="adminEmployeeID" name="adminEmployeeID" 
-                                    placeholder="请输入登录ID" 
+                                    placeholder="Please enter Login ID" 
                                     pattern="[A-Za-z0-9]{6,12}" 
-                                    title="登录ID必须为6-12位字母或数字" 
+                                    title="Login ID must be 6-12 characters (letters or numbers)" 
                                     required>
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="form-group">
-                                    <label for="adminEmail">邮箱地址</label>
-                                    <input type="email" class="form-control" id="adminEmail" name="adminEmail" placeholder="请输入邮箱" pattern="[a-z0-9._%+-]+@MIS\.com$" title="邮箱地址格式不正确" required>
+                                    <label for="adminEmail">Email Address</label>
+                                    <input type="email" class="form-control" id="adminEmail" name="adminEmail" placeholder="Please enter email" pattern="[a-z0-9._%+-]+@MIS\.com$" title="Invalid email format" required>
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="form-group">
-                                    <label for="adminPassword">密码</label>
-                                    <input type="password" class="form-control" id="adminPassword" name="adminPassword" placeholder="请输入密码" required oninput="checkPasswordSecurity(this)">
+                                    <label for="adminPassword">Password</label>
+                                    <input type="password" class="form-control" id="adminPassword" name="adminPassword" placeholder="Please enter password" required oninput="checkPasswordSecurity(this)">
                                     <div id="passwordStrengthBar" style="height: 8px;"></div>
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="form-group">
-                                    <label for="adminPasswordConfirm">确认密码</label>
-                                    <input type="password" class="form-control" id="adminPasswordConfirm" name="adminPasswordConfirm" placeholder="请再次输入密码" required oninput="checkPasswordMatch(this)">
+                                    <label for="adminPasswordConfirm">Confirm Password</label>
+                                    <input type="password" class="form-control" id="adminPasswordConfirm" name="adminPasswordConfirm" placeholder="Please re-enter password" required oninput="checkPasswordMatch(this)">
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="form-group">
-                                    <button type="submit" class="btn tf-btn btn-success">创建账户</button>
+                                    <button type="submit" class="btn tf-btn btn-success">Create Account</button>
                                 </div>
                             </div>
                         </div>
 
                         <div id="successMessage" style="display: none;">
-                            <p>账户创建成功！</p>
+                            <p>Account created successfully!</p>
                         </div>
                     </form>
                 </div>
@@ -220,12 +237,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             var strengthBar = document.getElementById('passwordStrengthBar');
             
             if (password.length < 8) {
-                input.setCustomValidity("密码必须至少8个字符。");
+                input.setCustomValidity("Password must be at least 8 characters.");
                 strengthBar.style.width = '10%';
                 strengthBar.style.backgroundColor = 'red';
             } 
             else if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[\W]/.test(password)) {
-                input.setCustomValidity("密码必须包含至少一个大写字母、一个小写字母和一个符号。");
+                input.setCustomValidity("Password must contain at least one uppercase letter, one lowercase letter, and one symbol.");
                 strengthBar.style.width = '15%';
                 strengthBar.style.backgroundColor = 'orange';
             } 
@@ -240,7 +257,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             var password = document.getElementById('adminPassword').value;
             var confirmPassword = input.value;
             if (password !== confirmPassword) {
-                input.setCustomValidity("两次输入的密码不一致。");
+                input.setCustomValidity("Passwords do not match.");
             } else {
                 input.setCustomValidity("");
             }

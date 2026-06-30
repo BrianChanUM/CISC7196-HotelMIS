@@ -1,37 +1,31 @@
-<?php
-// get_vehicle_data.php
+﻿<?php
+require_once __DIR__ . '/config/db_config.php';
 
-// Replace with your actual database credentials
-$servername = "localhost";
-$username = "root";
-$password = "123456";
-$dbname = "hmis";
+// Get the vehicle type from the query parameter
+$vehicleType = isset($_GET['vehicletype']) ? trim($_GET['vehicletype']) : '';
 
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+if (empty($vehicleType)) {
+    echo '<tr><td colspan="2">No data available</td></tr>';
+    exit;
 }
 
-// Get the vehicle type from the query parameter (you can sanitize this input)
-$vehicleType = $_GET['vehicletype'] ?? null;
+$conn = getDBConnection();
 
-// Query to retrieve data for the specified vehicle type
-$sql = "SELECT vehicletype, status FROM hotelvehicletype WHERE vehicletype = '$vehicleType'";
-$result = $conn->query($sql);
+// Query to retrieve data for the specified vehicle type using prepared statement
+$sql = "SELECT vehicletype, status FROM hotelvehicletype WHERE vehicletype = ?";
+$stmt = $conn->prepare($sql);
+$stmt->execute([$vehicleType]);
 
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
+if ($stmt->rowCount() > 0) {
+    while ($row = $stmt->fetch()) {
         echo '<tr>';
-        echo '<td class="editable" data-vehicletype="' . $row['vehicletype'] . '">' . $row['vehicletype'] . '</td>';
-        echo '<td class="editable" data-status="' . $row['status'] . '">' . ($row['status'] ? 'Enabled' : 'Disabled') . '</td>';
+        echo '<td class="editable" data-vehicletype="' . htmlspecialchars($row['vehicletype']) . '">' . htmlspecialchars($row['vehicletype']) . '</td>';
+        echo '<td class="editable" data-status="' . htmlspecialchars($row['status']) . '">' . ($row['status'] ? 'Enabled' : 'Disabled') . '</td>';
         echo '</tr>';
     }
 } else {
     echo '<tr><td colspan="2">No data available</td></tr>';
 }
 
-$conn->close();
+closeDBConnection($conn);
 ?>

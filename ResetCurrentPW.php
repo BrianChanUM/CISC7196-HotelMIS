@@ -24,25 +24,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } elseif (strlen($password) < 6) {
         $message = "Password must be at least 6 characters";
     } else {
-        $conn = new mysqli($db_config['host'], $db_config['username'], $db_config['password'], $db_config['dbname']);
-        
-        if ($conn->connect_error) {
-            die("Connection failed: " . $conn->connect_error);
-        }
+        $conn = getDBConnection();
 
         $stmt = $conn->prepare("UPDATE user SET Password = ?, ModifiedDate = NOW() WHERE UserName = ?");
-        $stmt->bind_param("ss", $password, $username);
+        $stmt->execute([$password, $username]);
         
-        if ($stmt->execute()) {
+        if ($stmt->rowCount() > 0) {
             $message = "Password updated successfully!";
             echo '<script>alert("Your password has been updated successfully!"); window.location.href = "profile.php";</script>';
             exit();
         } else {
-            $message = "Error updating password: " . $conn->error;
+            $message = "Error updating password";
         }
         
-        $stmt->close();
-        $conn->close();
+        closeDBConnection($conn);
     }
 }
 ?>

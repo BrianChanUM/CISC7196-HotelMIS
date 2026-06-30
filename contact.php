@@ -2,50 +2,60 @@
 require_once __DIR__ . '/config/db_config.php';
 require_once __DIR__ . '/config/language.php';
 
-$conn = getDBConnection();
-
 $etypes = [];
 $etype_query = "SELECT etype FROM enquirytype WHERE estatus = 1";
 $etype_result = executeQuery($etype_query);
 
-if ($etype_result && $etype_result->num_rows > 0) {
-    while($row = $etype_result->fetch_assoc()) {
-        $etypes[] = $row["etype"];
-    }
+if ($etype_result && $etype_result->rowCount() > 0) {
+    $etypes = $etype_result->fetchAll(PDO::FETCH_ASSOC);
+    $etypes = array_column($etypes, 'etype');
 }
 
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $eUser = $_POST['eUser'];
-    $eEmail = $_POST['eEmail'];
-    $ePhone = $_POST['ePhone'];
-    $eType = $_POST['eType'];
-    $eContent = $_POST['eContent'];
-    $eIsCall = ($_POST['eIsCall'] == 'yes') ? 1 : 0;
+    // Input validation
+    $eUser = trim($_POST['eUser'] ?? '');
+    $eEmail = trim($_POST['eEmail'] ?? '');
+    $ePhone = trim($_POST['ePhone'] ?? '');
+    $eType = trim($_POST['eType'] ?? '');
+    $eContent = trim($_POST['eContent'] ?? '');
+    $eIsCall = ($_POST['eIsCall'] ?? 'no') == 'yes' ? 1 : 0;
     $eCreatedDate = date("Y-m-d H:i:s");
-
-    $sql = "INSERT INTO enquiry (eUser, eEmail, ePhone, eType, eContent, eIsCall, eCreatedDate) VALUES (?, ?, ?, ?, ?, ?, ?)";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sssssis", $eUser, $eEmail, $ePhone, $eType, $eContent, $eIsCall, $eCreatedDate);
     
-    if ($stmt->execute() === TRUE) {
-        echo "<script type='text/javascript'>alert('" . t('thank_you_contact') . "');</script>";
-    } else {
-        echo "错误: " . "<br>" . $conn->error;
+    // Basic validation
+    $errors = [];
+    if (empty($eUser)) {
+        $errors[] = "Name is required";
     }
-    $stmt->close();
-    closeDBConnection($conn);
-    $conn = null; // Set to null to avoid double close
+    if (empty($eEmail) || !filter_var($eEmail, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = "Valid email is required";
+    }
+    if (empty($ePhone)) {
+        $errors[] = "Phone number is required";
+    }
+    if (empty($eContent)) {
+        $errors[] = "Message is required";
+    }
+    
+    if (!empty($errors)) {
+        echo "<script type='text/javascript'>alert('" . implode("\\n", $errors) . "');</script>";
+    } else {
+        $sql = "INSERT INTO enquiry (eUser, eEmail, ePhone, eType, eContent, eIsCall, eCreatedDate) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        $params = [$eUser, $eEmail, $ePhone, $eType, $eContent, $eIsCall, $eCreatedDate];
+        
+        $result = executeInsert($sql, $params);
+        
+        if ($result) {
+            echo "<script type='text/javascript'>alert('" . t('thank_you_contact') . "'); window.location.href = 'contact.php';</script>";
+        } else {
+            echo "<script type='text/javascript'>alert('Error submitting enquiry. Please try again.');</script>";
+        }
+    }
 }
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-
-// Only close connection if it's still open (not closed in POST handling)
-if ($conn) {
-    closeDBConnection($conn);
-}
 ?>
 
 <!DOCTYPE html>

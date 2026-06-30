@@ -1,46 +1,44 @@
 <?php
-$servername = "localhost";
-$username = "root";
-$password = "123456";
-$dbname = "hmis";
+require_once __DIR__ . '/config/db_config.php';
 
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check connection
-if ($conn->connect_error) {
-  die("Connection failed: " . $conn->connect_error);
-}
 $message = '';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-  $user = $_POST["username"];
-  $email = $_POST["email"];
-  $new_password = $_POST["password"];
-  $confirm_password = $_POST["confirm_password"];
+    $user = $_POST["username"];
+    $email = $_POST["email"];
+    $new_password = $_POST["password"];
+    $confirm_password = $_POST["confirm_password"];
 
-  // Check if username or email exists in the database
-  $sql = "SELECT * FROM user WHERE UserName='$user' and Email like'%$email%'";
-  $result = $conn->query($sql);
+    $conn = getDBConnection();
 
-  if ($result->num_rows > 0) {
-    // User exists, proceed with password update
-    if ($new_password == $confirm_password) {
-      $sql = "UPDATE user SET Password='$new_password', ModifiedDate=now() WHERE UserName='$user' and Email='$email'";
+    // 使用PDO预处理语句查询用户
+    $sql = "SELECT * FROM user WHERE UserName = ? AND Email LIKE ?";
+    $stmt = $conn->prepare($sql);
+    $emailPattern = "%$email%";
+    $stmt->execute([$user, $emailPattern]);
+    $result = $stmt->fetch();
 
-      if ($conn->query($sql) === TRUE) {
-        $message = "Password updated successfully";
-      } else {
-        $message = "Error updating password: " . $conn->error;
-      }
+    if ($result) {
+        // User exists, proceed with password update
+        if ($new_password == $confirm_password) {
+            $sql = "UPDATE user SET Password = ?, ModifiedDate = NOW() WHERE UserName = ? AND Email LIKE ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([$new_password, $user, $emailPattern]);
+            
+            if ($stmt->rowCount() > 0) {
+                $message = "Password updated successfully";
+            } else {
+                $message = "Error updating password";
+            }
+        } else {
+            $message = "Passwords do not match";
+        }
     } else {
-      $message = "Passwords do not match";
+        $message = "Username or Email Not exist";
     }
-  } else {
-    $message = "Username or Email Not exist";
-  }
-}
 
-$conn->close();
+    closeDBConnection($conn);
+}
 ?>
 
 <!DOCTYPE html>
@@ -87,7 +85,7 @@ $conn->close();
   
     <?php if ($message): ?>
     <script>
-      alert('<?php echo $message; ?>');
+      alert('<?php echo htmlspecialchars($message); ?>');
     </script>
   <?php endif; ?>
   

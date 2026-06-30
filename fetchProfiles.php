@@ -1,36 +1,24 @@
-<?php
-    // Get the role from the request
-    $role = $_GET['role'];
+﻿<?php
+require_once __DIR__ . '/config/db_config.php';
 
-    $servername = "localhost";
-    $username = "root";
-    $password = "123456";
-    $dbname = "hmis";
+// Get the role from the request
+$role = isset($_GET['role']) ? trim($_GET['role']) : '';
 
-    // Create connection
-    $conn = new mysqli($servername, $username, $password, $dbname);
+if (empty($role)) {
+    echo json_encode([]);
+    exit;
+}
 
-    // Check connection
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
-    }
+$conn = getDBConnection();
 
-    // Fetch all the user details with the specified role
-    $sql = "SELECT * FROM user WHERE Role = '" . $role . "'";
-    $result = $conn->query($sql);
+// Fetch all the user details with the specified role using prepared statement
+$sql = "SELECT * FROM user WHERE Role = ?";
+$stmt = $conn->prepare($sql);
+$stmt->execute([$role]);
+$data = $stmt->fetchAll();
 
-    $data = array(); // Array to hold your data
+closeDBConnection($conn);
 
-    // Process the results
-    if ($result->num_rows > 0) {
-        while($row = $result->fetch_assoc()) {
-            // Add each row of data to the $data array
-            $data[] = $row;
-        }
-    }
-
-    // Convert the $data array into JSON format
-    echo json_encode($data);
-
-    $conn->close();
+// Convert the $data array into JSON format
+echo json_encode($data);
 ?>

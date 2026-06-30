@@ -3,19 +3,13 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/language.php';
 require_once __DIR__ . '/function/check_permission.php';
+require_once __DIR__ . '/config/db_config.php';
 requireModulePermission('admin_reports_hotel', 'index.php');
 
-$servername = "localhost";
-$username = "root";
-$password = "123456";
-$dbname = "hmis";
-
-$conn = new mysqli($servername, $username, $password, $dbname);
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
+$conn = getDBConnection();
 
 $reportType = isset($_POST['report_type']) ? $_POST['report_type'] : 'monthly';
 $startDate = isset($_POST['start_date']) ? $_POST['start_date'] : date('Y-m-01');
@@ -24,16 +18,14 @@ $roomType = isset($_POST['room_type']) ? $_POST['room_type'] : '';
 
 $roomTypes = [];
 $sql = "SELECT DISTINCT HotelRoomtype FROM hotelroomtype";
-$result = $conn->query($sql);
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $roomTypes[] = $row['HotelRoomtype'];
-    }
+$stmt = $conn->query($sql);
+while ($row = $stmt->fetch()) {
+    $roomTypes[] = $row['HotelRoomtype'];
 }
 
 $chartData = [];
 $labels = [];
-$query = "";
+$params = [];
 
 if ($reportType === 'monthly') {
     $query = "SELECT MONTH(Time) as month, COUNT(*) as total 
@@ -41,46 +33,51 @@ if ($reportType === 'monthly') {
               WHERE OrderType = 'Hotel' 
               AND YEAR(Time) = YEAR(CURDATE())";
     if ($roomType) {
-        $query .= " AND OrderRemark LIKE '%$roomType%'";
+        $query .= " AND OrderRemark LIKE ?";
+        $params[] = "%$roomType%";
     }
     $query .= " GROUP BY MONTH(Time) ORDER BY month";
 } elseif ($reportType === 'daily') {
     $query = "SELECT DATE(Time) as date, COUNT(*) as total 
               FROM orderbookings 
               WHERE OrderType = 'Hotel' 
-              AND Time BETWEEN '$startDate' AND '$endDate'";
+              AND Time BETWEEN ? AND ?";
+    $params[] = $startDate;
+    $params[] = $endDate;
     if ($roomType) {
-        $query .= " AND OrderRemark LIKE '%$roomType%'";
+        $query .= " AND OrderRemark LIKE ?";
+        $params[] = "%$roomType%";
     }
     $query .= " GROUP BY DATE(Time) ORDER BY date";
 } else {
     $query = "SELECT DATE(Time) as date, COUNT(*) as total 
               FROM orderbookings 
               WHERE OrderType = 'Hotel' 
-              AND Time BETWEEN '$startDate' AND '$endDate'";
+              AND Time BETWEEN ? AND ?";
+    $params[] = $startDate;
+    $params[] = $endDate;
     if ($roomType) {
-        $query .= " AND OrderRemark LIKE '%$roomType%'";
+        $query .= " AND OrderRemark LIKE ?";
+        $params[] = "%$roomType%";
     }
     $query .= " GROUP BY DATE(Time) ORDER BY date";
 }
 
-$result = $conn->query($query);
+$stmt = $conn->prepare($query);
+$stmt->execute($params);
 $totalOrders = 0;
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        if ($reportType === 'monthly') {
-            $labels[] = date('F', mktime(0, 0, 0, $row['month'], 1));
-        } else {
-            $labels[] = $row['date'];
-        }
-        $chartData[] = $row['total'];
-        $totalOrders += $row['total'];
+while ($row = $stmt->fetch()) {
+    if ($reportType === 'monthly') {
+        $labels[] = date('F', mktime(0, 0, 0, $row['month'], 1));
+    } else {
+        $labels[] = $row['date'];
     }
+    $chartData[] = $row['total'];
+    $totalOrders += $row['total'];
 }
 
-$conn->close();
+closeDBConnection($conn);
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -153,13 +150,11 @@ $conn->close();
             </div>
         </div>
     </nav>
-
     <div class="report-container">
         <div class="section-title">
             <h3>Hotel Booking Report</h3>
             <div class="clearfix"></div>
         </div>
-        
         <form method="post" class="report-form">
             <div class="row">
                 <div class="col-md-3">
@@ -205,14 +200,12 @@ $conn->close();
                 </div>
             </div>
         </form>
-        
         <div class="stats-container">
             <div class="stat-box">
                 <h3><?php echo $totalOrders; ?></h3>
                 <p>Total Orders</p>
             </div>
         </div>
-        
         <div class="chart-container">
             <div style="margin-bottom: 15px; text-align: right;">
                 <label for="chartType" style="margin-right: 10px;">Chart Type:</label>
@@ -226,13 +219,10 @@ $conn->close();
             <canvas id="hotelChart"></canvas>
         </div>
     </div>
-
     <?php include(__DIR__ . '/layout/footer.php');?>
-
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
     <script type="text/javascript" src="js/jquery.1.11.1.js"></script>
     <script type="text/javascript" src="js/bootstrap.js"></script>
-    
     <script>
     var ctx = document.getElementById('hotelChart').getContext('2d');
     var chartData = <?php echo json_encode($chartData); ?>;

@@ -1,39 +1,27 @@
 <?php
-// Set your connection variables
-$servername = "localhost";
-$username = "root";
-$password = "123456";
-$dbname = "hmis";
+require_once __DIR__ . '/config/db_config.php';
 
-// Create a connection
-$conn = new mysqli($servername, $username, $password, $dbname);
+$conn = getDBConnection();
 
-// Check the connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
-
-// Check if the form is submitted and if form data is set
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['task_name'], $_POST['task_priority'], $_POST['task_date'], $_POST['task_time'])) {
-    // Get form data
-    $task_name = $_POST['task_name'];
-    $task_priority = $_POST['task_priority'];
-    $task_date = $_POST['task_date'];
-    $task_time = $_POST['task_time'];
+    $task_name = trim($_POST['task_name']);
+    $task_priority = trim($_POST['task_priority']);
+    $task_date = trim($_POST['task_date']);
+    $task_time = trim($_POST['task_time']);
 
-    // Insert task into the database
-    $sql = "INSERT INTO tasks (task_name, task_priority, task_date, task_time) VALUES ('$task_name', '$task_priority', '$task_date', '$task_time')";
-
-    if ($conn->query($sql) === TRUE) {
-        echo "New task created successfully";
+    if (!empty($task_name) && !empty($task_date) && !empty($task_time)) {
+        $stmt = $conn->prepare("INSERT INTO tasks (task_name, task_priority, task_date, task_time) VALUES (?, ?, ?, ?)");
+        if ($stmt->execute([$task_name, $task_priority, $task_date, $task_time])) {
+            echo "New task created successfully";
+        } else {
+            echo "Error creating task";
+        }
     } else {
-        echo "Error: " . $sql . "<br>" . $conn->error;
+        echo "Form data is missing or invalid.";
     }
 } else {
     echo "Form data is missing.";
 }
 
-$conn->close();
+closeDBConnection($conn);
 ?>
-
-

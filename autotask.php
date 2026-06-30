@@ -2,37 +2,34 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/language.php';
 require_once __DIR__ . '/function/check_permission.php';
+require_once __DIR__ . '/config/db_config.php';
 requireModulePermission('admin_auto_task', 'index.php');
 
-$servername = "localhost";
-$username = "root";
-$password = "123456";
-$dbname = "hmis";
-$conn = new mysqli($servername, $username, $password, $dbname);
+$conn = getDBConnection();
 
 if (isset($_POST['action']) && isset($_POST['order_id'])) {
     $action = $_POST['action'];
     $orderId = intval($_POST['order_id']);
-    
+
     $statusMap = [
         'confirm' => 'Confirmed',
         'reject' => 'Rejected',
         'pending' => 'TBC'
     ];
-    
+
     if (isset($statusMap[$action])) {
         $newStatus = $statusMap[$action];
         $stmt = $conn->prepare("UPDATE orderbookings SET Status = ?, OrderModifiedDate = NOW() WHERE OrderID = ?");
-        $stmt->bind_param("si", $newStatus, $orderId);
-        
-        if ($stmt->execute()) {
+        $stmt->execute([$newStatus, $orderId]);
+
+        if ($stmt->rowCount() > 0) {
             echo "<script>alert('Order status updated successfully!'); window.location.href = 'autotask.php';</script>";
         } else {
             echo "<script>alert('Failed to update order status.'); window.location.href = 'autotask.php';</script>";
         }
-        $stmt->close();
         exit();
     }
 }
@@ -40,24 +37,22 @@ if (isset($_POST['action']) && isset($_POST['order_id'])) {
 if (isset($_POST['batch_action']) && isset($_POST['selected_orders']) && isset($_POST['batch_status'])) {
     $selectedOrders = $_POST['selected_orders'];
     $newStatus = $_POST['batch_status'];
-    
+
     if (!empty($selectedOrders) && in_array($newStatus, ['Confirmed', 'Rejected', 'TBC'])) {
         $placeholders = implode(',', array_fill(0, count($selectedOrders), '?'));
-        $types = str_repeat('i', count($selectedOrders));
-        
+
         $sql = "UPDATE orderbookings SET Status = ?, OrderModifiedDate = NOW() WHERE OrderID IN ($placeholders)";
         $stmt = $conn->prepare($sql);
-        
+
         $params = array_merge([$newStatus], $selectedOrders);
-        $stmt->bind_param("s$types", ...$params);
-        
-        if ($stmt->execute()) {
-            $count = $stmt->affected_rows;
+        $stmt->execute($params);
+
+        $count = $stmt->rowCount();
+        if ($count > 0) {
             echo "<script>alert('Successfully updated $count orders!'); window.location.href = 'autotask.php';</script>";
         } else {
             echo "<script>alert('Failed to update orders.'); window.location.href = 'autotask.php';</script>";
         }
-        $stmt->close();
         exit();
     }
 }
@@ -75,17 +70,19 @@ if (isset($_POST['process_orders']) || isset($_POST['refresh_orders'])) {
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['task_name'], $_POST['task_priority'], $_POST['task_date'], $_POST['task_time'])) {
-    $task_name = $_POST['task_name'];
-    $task_priority = $_POST['task_priority'];
-    $task_date = $_POST['task_date'];
-    $task_time = $_POST['task_time'];
-    $sql = "INSERT INTO tasks (task_name, task_priority, task_date, task_time) VALUES ('$task_name', '$task_priority', '$task_date', '$task_time')";
-    if ($conn->query($sql) === TRUE) {
-        echo "<script>alert('New task created successfully!'); window.location.href = 'autotask.php';</script>";
+    $task_name = trim($_POST['task_name']);
+    $task_priority = trim($_POST['task_priority']);
+    $task_date = trim($_POST['task_date']);
+    $task_time = trim($_POST['task_time']);
+    
+    if (!empty($task_name) && !empty($task_date) && !empty($task_time)) {
+        $stmt = $conn->prepare("INSERT INTO tasks (task_name, task_priority, task_date, task_time) VALUES (?, ?, ?, ?)");
+        if ($stmt->execute([$task_name, $task_priority, $task_date, $task_time])) {
+            echo "<script>alert('New task created successfully!'); window.location.href = 'autotask.php';</script>";
+        }
     }
     exit();
-}
-?><!DOCTYPE html>
+}?><!DOCTYPE html>
 <html lang="en">
   <head>
     <!-- Basic Page Needs
@@ -410,4 +407,4 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['task_name'], $_POST['t
 
   </body>
 </html>
-<?php $conn->close(); ?>
+<?php closeDBConnection($conn); ?>

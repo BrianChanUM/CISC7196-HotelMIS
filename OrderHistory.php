@@ -2,7 +2,9 @@
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
+    require_once __DIR__ . '/config/session_check.php';
     require_once __DIR__ . '/config/language.php';
+    require_once __DIR__ . '/config/db_config.php';
     
     if (!isset($_SESSION["username"]) || empty($_SESSION["username"])) {
         header("Location: login.php");
@@ -11,6 +13,8 @@
     
     $user = json_encode($_SESSION);
     $loggedInUsername = $_SESSION["username"];
+    
+    $conn = getDBConnection();
 ?>
 
 <!DOCTYPE html>
@@ -104,53 +108,70 @@
 
  
 <?php
-$servername = "localhost";
-$dbusername = "root";
-$dbpassword = "123456";
-$dbname = "hmis";
-
-// Create a connection
-$conn = new mysqli($servername, $dbusername, $dbpassword, $dbname);
-
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+// 添加错误日志记录函数
+function logError($message) {
+    error_log("[OrderHistory Error] " . date('Y-m-d H:i:s') . " - " . $message);
 }
 
-// Query to retrieve all orders
-$sql = "SELECT orderid, ordertype, OrderCreatedDate, email, contactno, OrderRemark, Status
-        FROM `orderbookings`
-        ORDER BY `OrderID` DESC";
+// 获取用户角色信息
+$userRole = isset($_SESSION['role']) ? $_SESSION['role'] : 'guest';
+$userEmail = isset($_SESSION['email']) ? $_SESSION['email'] : '';
 
-$result = $conn->query($sql);
-
-// Check if the query was successful
-if ($result === false) {
-    die("Error executing query: " . $conn->error);
+try {
+    // 根据用户角色构建查询
+    if(true){
+    // if ($userRole == 'guest' && !empty($userEmail)) {
+        // 普通用户只能查看自己的订单
+        $sql = "SELECT OrderID, OrderType, OrderCreatedDate, Email, ContactNo, OrderRemark, Status, PaymentStatus
+                FROM `orderbookings`
+                WHERE Email = ?
+                ORDER BY `OrderID` DESC";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute([$userEmail]);
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    // else {
+    //     // 管理员/经理可以查看所有订单
+    //     $sql = "SELECT OrderID, OrderType, OrderCreatedDate, Email, ContactNo, OrderRemark, Status, PaymentStatus
+    //             FROM `orderbookings`
+    //             ORDER BY `OrderID` DESC";
+    //     $result = $conn->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    // }
+    
+    // 获取订单类型统计
+    if ($userRole == 'guest' && !empty($userEmail)) {
+        $countSql = "SELECT OrderType, COUNT(*) AS order_count
+                     FROM `orderbookings`
+                     WHERE Email = ?
+                     GROUP BY OrderType";
+        $countStmt = $conn->prepare($countSql);
+        $countStmt->execute([$userEmail]);
+        $countResult = $countStmt->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $countSql = "SELECT OrderType, COUNT(*) AS order_count
+                     FROM `orderbookings`
+                     GROUP BY OrderType";
+        $countResult = $conn->query($countSql)->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    $totalOrders = count($result);
+    logError("Successfully fetched $totalOrders orders for user: " . ($userRole == 'guest' ? $userEmail : 'admin'));
+    
+} catch (PDOException $e) {
+    $errorMsg = "Database query failed: " . $e->getMessage();
+    logError($errorMsg);
+    $result = [];
+    $countResult = [];
+    $totalOrders = 0;
 }
 
-// Fetch the count query result
-$countSql = "SELECT ordertype, COUNT(*) AS order_count
-             FROM `orderbookings`
-             GROUP BY ordertype";
-
-$countResult = $conn->query($countSql);
-
-// Check if the count query was successful
-if ($countResult === false) {
-    die("Error executing count query: " . $conn->error);
-}
-
-// Close the connection
-$conn->close();
-
-
+closeDBConnection($conn);
 ?>
 
 				
 				
 		<h4>Order History Details</h4>
-		<table class="order-details">
+		<table class="order-details" id="orderbookings">
   <tr>
             <th>Order ID</th>
 			<th>Order Type</th>
@@ -159,22 +180,24 @@ $conn->close();
 			<th>Contact No</th>
 			<th>Remark</th>
 			<th>Status</th>
+			<th>Payment Status</th>
         </tr>
         <?php
-        if ($result->num_rows > 0) {
-            while ($row = $result->fetch_assoc()) {
-              echo "<tr>";
-                echo "<td>" . $row["orderid"] . "</td>";
-				echo "<td>" . $row["ordertype"] . "</td>";
-                echo "<td>" . $row["OrderCreatedDate"] . "</td>";
-                echo "<td>" . $row["email"] . "</td>";
-				echo "<td>" . $row["contactno"] . "</td>";
-				echo "<td>" . ($row["OrderRemark"] ?? "N/A") . "</td>";
-				echo "<td>" . ($row["Status"] ?? "N/A") . "</td>";
+        if (!empty($result)) {
+            foreach ($result as $row) {
+                echo "<tr>";
+                echo "<td>" . htmlspecialchars($row["OrderID"] ?? '') . "</td>";
+                echo "<td>" . htmlspecialchars($row["OrderType"] ?? '') . "</td>";
+                echo "<td>" . htmlspecialchars($row["OrderCreatedDate"] ?? '') . "</td>";
+                echo "<td>" . htmlspecialchars($row["Email"] ?? '') . "</td>";
+                echo "<td>" . htmlspecialchars($row["ContactNo"] ?? '') . "</td>";
+                echo "<td>" . htmlspecialchars($row["OrderRemark"] ?? "N/A") . "</td>";
+                echo "<td>" . htmlspecialchars($row["Status"] ?? "N/A") . "</td>";
+                echo "<td>" . htmlspecialchars($row["PaymentStatus"] ?? "N/A") . "</td>";
                 echo "</tr>";
             }
         } else {
-            echo "<tr><td colspan='7'>No orders found.</td></tr>";
+            echo "<tr><td colspan='8'>No orders found.</td></tr>";
         }
         ?> 		
 				
@@ -251,14 +274,25 @@ function closeModal() {
 
 
 
+// 分页功能 - 添加错误处理
 var table = document.getElementById('orderbookings');
-var totalRows = table.rows.length -1 ;
+var totalRows = 0;
 var limit = 30; // Number of rows per page
-var totalPages = Math.ceil(totalRows / limit);
+var totalPages = 1;
 var currentPage = 1;
 
+// 检查表格是否存在
+if (table) {
+    totalRows = table.rows.length - 1; // 减去表头行
+    totalPages = Math.max(1, Math.ceil(totalRows / limit));
+} else {
+    console.error('Order history table not found');
+}
+
 function paginate() {
-    for(var i = 1; i < totalRows; i++) {
+    if (!table) return;
+    
+    for(var i = 1; i < table.rows.length; i++) {
         if(i < ((currentPage - 1) * limit) + 1 || i > (currentPage * limit)) {
             table.rows[i].style.display = 'none';
         } else {
@@ -266,21 +300,27 @@ function paginate() {
         }
     }
     // Update record number
-    var startRecord = ((currentPage - 1) * limit) + 1;
+    var startRecord = totalRows > 0 ? ((currentPage - 1) * limit) + 1 : 0;
     var endRecord = Math.min(currentPage * limit, totalRows);
-    document.getElementById('recordNumber').innerText = 'Showing ' + startRecord + ' to ' + endRecord + ' of ' + totalRows ;
+    var recordNumberEl = document.getElementById('recordNumber');
+    if (recordNumberEl) {
+        recordNumberEl.innerText = 'Showing ' + startRecord + ' to ' + endRecord + ' of ' + totalRows;
+    }
 }
 
 function changePage(delta) {
+    if (totalRows === 0) return;
+    
     currentPage += delta;
-
     // Make sure currentPage is within valid range
-    currentPage = Math.max(1, Math.min(currentPage, Math.ceil(totalRows / limit)));
-
+    currentPage = Math.max(1, Math.min(currentPage, totalPages));
     paginate();
 }
 
-paginate();
+// 只有在表格存在且有数据时才执行分页
+if (table && totalRows > 0) {
+    paginate();
+}
 
 		
 </script>

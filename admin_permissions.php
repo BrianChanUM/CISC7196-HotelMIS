@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/db_config.php';
 require_once __DIR__ . '/config/language.php';
 require_once __DIR__ . '/function/check_permission.php';
@@ -17,9 +18,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_permissions'])) {
     
     if ($userId > 0) {
         $deleteStmt = $conn->prepare("DELETE FROM user_permissions WHERE user_id = ?");
-        $deleteStmt->bind_param("i", $userId);
-        $deleteStmt->execute();
-        $deleteStmt->close();
+        $deleteStmt->execute([$userId]);
         
         $modules = isset($_POST['modules']) ? $_POST['modules'] : [];
         
@@ -30,9 +29,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_permissions'])) {
                 $isAllowed = isset($value) && $value == '1' ? 1 : 0;
                 
                 $stmt = $conn->prepare("INSERT INTO user_permissions (user_id, module, permission_type, is_allowed) VALUES (?, ?, ?, ?)");
-                $stmt->bind_param("issi", $userId, $module, $permissionType, $isAllowed);
-                $stmt->execute();
-                $stmt->close();
+                $stmt->execute([$userId, $module, $permissionType, $isAllowed]);
                 
                 $key = $module . '_' . $permissionType;
                 $newPermissions[$key] = $isAllowed == 1;
@@ -49,12 +46,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_permissions'])) {
 
 $users = [];
 $sql = "SELECT UID, UserName, Email, Role FROM user WHERE Role != 'guest' ORDER BY UserName";
-$result = $conn->query($sql);
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $users[] = $row;
-    }
-}
+$stmt = $conn->prepare($sql);
+$stmt->execute();
+$users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $modulesList = [
     'hotel_booking' => 'Hotel Booking',
@@ -67,9 +61,11 @@ $modulesList = [
     'admin_rooms' => 'Admin - Rooms',
     'admin_vehicles' => 'Admin - Vehicles',
     'admin_outlets' => 'Admin - Outlets',
+    'admin_dashboard' => 'Admin - Dashboard',
     'admin_reports_fnb' => 'Admin - Reports FnB',
     'admin_reports_hotel' => 'Admin - Reports Hotel',
     'admin_reports_limo' => 'Admin - Reports Limo',
+    'admin_reports_kpi' => 'Admin - Reports KPI',
     'admin_permissions' => 'Admin - Permissions'
 ];
 
@@ -80,7 +76,7 @@ $permissionTypes = [
     'delete' => 'Delete'
 ];
 
-$conn->close();
+closeDBConnection($conn);
 ?>
 
 <!DOCTYPE html>

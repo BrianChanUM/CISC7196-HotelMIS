@@ -2,6 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/language.php';
 require_once __DIR__ . '/function/check_permission.php';
 requirePermission('admin_vehicles', 'view', 'index.php');
@@ -21,13 +22,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
         }
         $vehicleType = $_POST['vehicleType'];
         $stmt = $conn->prepare("DELETE FROM hotelvehicletype WHERE VehicleType = ?");
-        $stmt->bind_param("s", $vehicleType);
-        if ($stmt->execute()) {
+        if ($stmt->execute([$vehicleType])) {
             echo json_encode(['success' => true, 'message' => 'Vehicle type deleted successfully']);
         } else {
             echo json_encode(['success' => false, 'message' => 'Error deleting vehicle type']);
         }
-        $stmt->close();
         exit;
     }
     
@@ -42,28 +41,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
         $status = $_POST['status'];
         
         $stmt = $conn->prepare("UPDATE hotelvehicletype SET VehicleType = ?, daily_quantity = ?, status = ? WHERE VehicleType = ?");
-        $stmt->bind_param("siis", $vehicleType, $dailyQuantity, $status, $oldVehicleType);
-        if ($stmt->execute()) {
+        if ($stmt->execute([$vehicleType, $dailyQuantity, $status, $oldVehicleType])) {
             echo json_encode(['success' => true, 'message' => 'Vehicle type updated successfully']);
         } else {
             echo json_encode(['success' => false, 'message' => 'Error updating vehicle type']);
         }
-        $stmt->close();
         exit;
     }
     
     if ($_POST['action'] == 'get') {
         $vehicleType = $_POST['vehicleType'];
         $stmt = $conn->prepare("SELECT * FROM hotelvehicletype WHERE VehicleType = ?");
-        $stmt->bind_param("s", $vehicleType);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($row = $result->fetch_assoc()) {
+        $stmt->execute([$vehicleType]);
+        $row = $stmt->fetch();
+        if ($row) {
             echo json_encode(['success' => true, 'data' => $row]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Vehicle type not found']);
         }
-        $stmt->close();
         exit;
     }
 }
@@ -176,8 +171,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                             $sql = "SELECT * FROM hotelvehicletype ORDER BY VehicleType";
                             $result = $conn->query($sql);
                             
-                            if ($result->num_rows > 0) {
-                                while($row = $result->fetch_assoc()) {
+                            if ($result->rowCount() > 0) {
+                                while($row = $result->fetch(PDO::FETCH_ASSOC)) {
                                     $statusClass = $row['status'] ? 'status-enabled' : 'status-disabled';
                                     $statusText = $row['status'] ? 'Enabled' : 'Disabled';
                                     
@@ -218,8 +213,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                             $sql = "SELECT * FROM hotelvehicletype WHERE status = 1 ORDER BY VehicleType";
                             $result = $conn->query($sql);
                             
-                            if ($result->num_rows > 0) {
-                                while($row = $result->fetch_assoc()) {
+                            if ($result->rowCount() > 0) {
+                                while($row = $result->fetch(PDO::FETCH_ASSOC)) {
                                     $statusClass = $row['status'] ? 'status-enabled' : 'status-disabled';
                                     $statusText = $row['status'] ? 'Enabled' : 'Disabled';
                                     
@@ -260,8 +255,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                             $sql = "SELECT * FROM hotelvehicletype WHERE status = 0 ORDER BY VehicleType";
                             $result = $conn->query($sql);
                             
-                            if ($result->num_rows > 0) {
-                                while($row = $result->fetch_assoc()) {
+                            if ($result->rowCount() > 0) {
+                                while($row = $result->fetch(PDO::FETCH_ASSOC)) {
                                     $statusClass = $row['status'] ? 'status-enabled' : 'status-disabled';
                                     $statusText = $row['status'] ? 'Enabled' : 'Disabled';
                                     
@@ -446,5 +441,5 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
 </body>
 </html>
 <?php
-$conn->close();
+closeDBConnection($conn);
 ?>

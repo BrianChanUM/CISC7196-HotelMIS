@@ -1,16 +1,85 @@
 <?php
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/session_check.php';
+require_once __DIR__ . '/config/language.php';
+require_once __DIR__ . '/function/check_permission.php';
+require_once __DIR__ . '/config/db_config.php';
+requireModulePermission('admin_orders', 'index.php');
+$user = json_encode($_SESSION);
+
+$conn = getDBConnection();
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (isset($_POST["orderId"]) && isset($_POST["status"])) {
+        $orderId = intval($_POST["orderId"]);
+        $newStatus = $_POST["status"];
+
+        $getOrderStmt = $conn->prepare("SELECT OrderType, OrderRemark FROM orderbookings WHERE OrderID = ?");
+        $getOrderStmt->execute([$orderId]);
+        $orderRow = $getOrderStmt->fetch();
+        
+        if ($orderRow) {
+            $orderType = $orderRow['OrderType'];
+            $orderRemark = $orderRow['OrderRemark'];
+            
+            if ($newStatus == 'Canceled') {
+                if ($orderType == 'Hotel') {
+                    preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                    if (isset($matches[1])) {
+                        $roomType = trim($matches[1]);
+                        $restoreStmt = $conn->prepare("UPDATE hotelroomtype SET daily_quantity = daily_quantity + 1 WHERE HotelRoomtype = ?");
+                        $restoreStmt->execute([$roomType]);
+                    }
+                } elseif ($orderType == 'Limo') {
+                    preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                    if (isset($matches[1])) {
+                        $vehicleType = trim($matches[1]);
+                        $restoreStmt = $conn->prepare("UPDATE hotelvehicletype SET daily_quantity = daily_quantity + 1 WHERE VehicleType = ?");
+                        $restoreStmt->execute([$vehicleType]);
+                    }
+                }
+            }
+        }
+
+        $updateStmt = $conn->prepare("UPDATE orderbookings SET Status = ?, OrderModifiedDate = NOW() WHERE OrderID = ?");
+        if ($updateStmt->execute([$newStatus, $orderId])) {
+            echo "Status updated successfully";
+        } else {
+            echo "Error updating status";
+        }
     }
-    require_once __DIR__ . '/config/language.php';
-    require_once __DIR__ . '/function/check_permission.php';
-    requireModulePermission('admin_orders', 'index.php');
-    $user = json_encode($_SESSION);
+}
+
+function getOrders($status, $startDate = '', $endDate = '', $conn) {
+    $params = [];
+    $sql = "SELECT * FROM orderbookings";
+    
+    if ($status !== 'All') {
+        $sql .= " WHERE status = ?";
+        $params[] = $status;
+    }
+    
+    if (!empty($startDate) && !empty($endDate)) {
+        $sql .= ($status !== 'All' ? ' AND' : ' WHERE') . " OrderCreatedDate BETWEEN ? AND ?";
+        $params[] = $startDate;
+        $params[] = $endDate;
+    }
+    
+    if ($status !== 'All') {
+        $sql .= " ORDER BY OrderCreatedDate DESC";
+    }
+    
+    $stmt = $conn->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+$startDate = isset($_REQUEST['startDate']) ? $_REQUEST['startDate'] : '';
+$endDate = isset($_REQUEST['endDate']) ? $_REQUEST['endDate'] : '';
+$statuses = ['All', 'TBC', 'Confirmed', 'Canceled'];
 ?>
-
-
-
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -100,31 +169,11 @@
               <h3>All</h3>
  <table id="orderbookings">
   <?php
-          $servername = "localhost";
-          $username = "root";
-          $password = "123456";
-          $dbname = "hmis";
-
-          // Create connection
-          $conn = new mysqli($servername, $username, $password, $dbname);
-
-          // Check connection
-          if ($conn->connect_error) {
-              die("Connection failed: " . $conn->connect_error);
-          }
-		  
-			$startDate = isset($_REQUEST['startDate']) ? $_REQUEST['startDate'] : '';
-			$endDate = isset($_REQUEST['endDate']) ? $_REQUEST['endDate'] : '';
-			$statuses = ['All', 'TBC', 'Confirmed', 'Canceled'];
-	
-
     foreach ($statuses as $status) {
-        echo "<div id=\"$status\" class=\"tabcontent\">";
-        echo "<h3>$status</h3>";
-       echo "<table id=\"orderbookings_$status\">";
+        echo "<div id=\"" . htmlspecialchars($status) . "\" class=\"tabcontent\">";
+        echo "<h3>" . htmlspecialchars($status) . "</h3>";
+        echo "<table id=\"orderbookings_" . htmlspecialchars($status) . "\">";
 
-
-        // Add the table headers here
         echo "<tr>";
         echo "<th onclick=\"sortTable(0)\">Order ID</th>";
         echo "<th onclick=\"sortTable(1)\">Order Type</th>";
@@ -137,89 +186,29 @@
         echo "<th>Action</th>";
         echo "</tr>";
 
-               if ($status == 'All') {
-            $sql = "SELECT * FROM orderbookings";
-            if (!empty($startDate) && !empty($endDate)) {
-                $sql .= " WHERE OrderCreatedDate BETWEEN '$startDate' AND '$endDate'";
-            }
-        } else {
-            $sql = "SELECT * FROM orderbookings WHERE status = '$status'";
-            if (!empty($startDate) && !empty($endDate)) {
-                $sql .= " AND OrderCreatedDate BETWEEN '$startDate' AND '$endDate'";
-            }
-            $sql .= " ORDER BY OrderCreatedDate DESC";
-        }
-
-        $result = $conn->query($sql);
-
-        if ($result->num_rows > 0) {
-            while($row = $result->fetch_assoc()) {
+        $orders = getOrders($status, $startDate, $endDate, $conn);
+        if (!empty($orders)) {
+            foreach($orders as $row) {
                 echo "<tr>";
-                echo "<td>" . $row["OrderID"] . "</td>";
-                echo "<td>" . $row["OrderType"] . "</td>";
-                echo "<td>" . $row["Time"] . "</td>";
-                echo "<td>" . $row["Email"] . "</td>";
-                echo "<td>" . $row["OrderRemark"] . "</td>";
-                echo "<td>" . $row["Status"] . "</td>";
-                echo "<td>" . $row["OrderCreatedDate"] . "</td>";
-                echo "<td>" . $row["OrderModifiedDate"] . "</td>";
-                echo "<td><button class='action-btn review' onclick='openModal(\"" . $row["OrderID"] . "\", \"" . $row["OrderType"] . "\", \"" . $row["Time"] . "\", \"" . $row["Email"] . "\", \"" . $row["OrderRemark"] . "\", \"" . $row["Status"] . "\", \"" . $row["OrderCreatedDate"] . "\", \"" . $row["OrderModifiedDate"] . "\", \"" . $row["AssignedTo"] . "\")'>Review</button></td>";
+                echo "<td>" . htmlspecialchars($row["OrderID"]) . "</td>";
+                echo "<td>" . htmlspecialchars($row["OrderType"]) . "</td>";
+                echo "<td>" . htmlspecialchars($row["Time"]) . "</td>";
+                echo "<td>" . htmlspecialchars($row["Email"]) . "</td>";
+                echo "<td>" . htmlspecialchars($row["OrderRemark"]) . "</td>";
+                echo "<td>" . htmlspecialchars($row["Status"]) . "</td>";
+                echo "<td>" . htmlspecialchars($row["OrderCreatedDate"]) . "</td>";
+                echo "<td>" . htmlspecialchars($row["OrderModifiedDate"]) . "</td>";
+                echo "<td><button class='action-btn review' onclick='openModal(\"" . htmlspecialchars($row["OrderID"]) . "\", \"" . htmlspecialchars($row["OrderType"]) . "\", \"" . htmlspecialchars($row["Time"]) . "\", \"" . htmlspecialchars($row["Email"]) . "\", \"" . htmlspecialchars($row["OrderRemark"]) . "\", \"" . htmlspecialchars($row["Status"]) . "\", \"" . htmlspecialchars($row["OrderCreatedDate"]) . "\", \"" . htmlspecialchars($row["OrderModifiedDate"]) . "\", \"" . htmlspecialchars($row["AssignedTo"]) . "\")'>Review</button></td>";
                 echo "</tr>";
             }
         } else {
-            echo "0 results";
+            echo "<tr><td colspan='9'>0 results</td></tr>";
         }
 
         echo "</table>";
         echo "</div>";
     }
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    if (isset($_POST["orderId"]) && isset($_POST["status"])) {
-        $orderId = $_POST["orderId"];
-        $newStatus = $_POST["status"];
-        $date = date('Y-m-d H:i:s');
-
-        $getOrderSql = "SELECT OrderType, OrderRemark FROM orderbookings WHERE OrderID = $orderId";
-        $orderResult = $conn->query($getOrderSql);
-        
-        if ($orderResult && $orderRow = $orderResult->fetch_assoc()) {
-            $orderType = $orderRow['OrderType'];
-            $orderRemark = $orderRow['OrderRemark'];
-            
-            if ($newStatus == 'Canceled') {
-                if ($orderType == 'Hotel') {
-                    preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
-                    if (isset($matches[1])) {
-                        $roomType = trim($matches[1]);
-                        $restoreSql = "UPDATE hotelroomtype SET daily_quantity = daily_quantity + 1 WHERE HotelRoomtype = ?";
-                        $restoreStmt = $conn->prepare($restoreSql);
-                        $restoreStmt->bind_param("s", $roomType);
-                        $restoreStmt->execute();
-                        $restoreStmt->close();
-                    }
-                } elseif ($orderType == 'Limo') {
-                    preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
-                    if (isset($matches[1])) {
-                        $vehicleType = trim($matches[1]);
-                        $restoreSql = "UPDATE hotelvehicletype SET daily_quantity = daily_quantity + 1 WHERE VehicleType = ?";
-                        $restoreStmt = $conn->prepare($restoreSql);
-                        $restoreStmt->bind_param("s", $vehicleType);
-                        $restoreStmt->execute();
-                        $restoreStmt->close();
-                    }
-                }
-            }
-        }
-
-        $sql = "UPDATE orderbookings SET Status='$newStatus', OrderModifiedDate=NOW() WHERE OrderID=$orderId";
-        if ($conn->query($sql) === TRUE) {
-            echo "Status updated successfully";
-        } else {
-            echo "Error updating status: " . $conn->error;
-        }
-    }
-}
-    $conn->close();
+closeDBConnection($conn);
 ?>
 </table></div>
             
@@ -239,8 +228,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       </div>
     </div>
 	
-	
-	
       <?php include(__DIR__ . '/layout/footer.php');?>
     <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
@@ -258,10 +245,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       var span = document.getElementsByClassName("close")[0];
 
 function openModal(orderId, time, places, eventType, contact, phone, email, status, AssignedTo) {
-    var modal = document.getElementById("myModal"); // Make sure "myModal" is the id of your modal
+    var modal = document.getElementById("myModal");
     var modalText = document.getElementById("modalText");
     modalText.innerHTML = "<b>Order Details</b><br>Order ID: " + orderId + "<br>Order Type: " + time + "<br>Time: " + places + "<br>Email: " + eventType + "<br>Order Remark: " + contact + "<br>Last Status: " + phone + "<br>Order Created Date: " + email + "<br>Status: " + status + "<br><b>Assigned To:</b> " + AssignedTo;
-    modalText.dataset.orderId = orderId; // Set the orderId in a data attribute
+    modalText.dataset.orderId = orderId;
     modal.style.display = "block";
 }
       span.onclick = function() {
@@ -285,15 +272,12 @@ function openModal(orderId, time, places, eventType, contact, phone, email, stat
 
  function updateStatus(status) {
     var xhr = new XMLHttpRequest();
-    xhr.open("POST", "<?php echo $_SERVER['PHP_SELF']; ?>", true);
+    xhr.open("POST", "<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>", true);
     xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded"); 
     xhr.onreadystatechange = function() {
         if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
-            // Log the server response for debugging
             console.log('Server response:', this.responseText);
-            // Close the modal
             modal.style.display = "none";
-            // Refresh the page
             location.reload();
         }
     }
@@ -335,7 +319,7 @@ function openModal(orderId, time, places, eventType, contact, phone, email, stat
 });
 		
 var statuses = ['All', 'TBC', 'Confirmed', 'Canceled'];
-var limit = 20; // Number of rows per page
+var limit = 20;
 var currentPage = 1;
 
 function paginate() {
@@ -349,7 +333,6 @@ function paginate() {
                 table.rows[i].style.display = '';
             }
         }
-        // Update record number
         var startRecord = ((currentPage - 1) * limit) + 1;
         var endRecord = Math.min(currentPage * limit, totalRows - 1);
         document.getElementById('recordNumber').innerText = 'Showing ' + startRecord + ' to ' + endRecord + ' of ' + (totalRows - 1);
@@ -358,8 +341,7 @@ function paginate() {
 
 window.changePage = function(delta) {
     currentPage += delta;
-    // Make sure currentPage is within valid range
-    var maxPage = 1; // Initialize to 1, will be calculated for each table
+    var maxPage = 1;
     statuses.forEach(function(status) {
         var table = document.getElementById('orderbookings_' + status);
         var totalRows = table.rows.length;
@@ -376,31 +358,26 @@ function filterByDate() {
     var endDate = $('#endDate').val();
 
     $.ajax({
-        url: window.location.href,  // Replace with the path to your PHP script
+        url: window.location.href,
         type: 'POST',
         data: {
             'startDate': startDate,
             'endDate': endDate
         },
         success: function(data) {
-            // Refresh your table with the new data
             $('#orderbookings').html(data);
         }
     });
 }
 
 function searchTable() {
-    // Get the search query
     var query = document.getElementById('searchInput').value.toLowerCase();
 
-    // Loop through all the tables
     statuses.forEach(function(status) {
         var table = document.getElementById('orderbookings_' + status);
         var rows = table.rows;
 
-        // Loop through all the rows (skip the first one, as it's the header)
         for (var i = 1; i < rows.length; i++) {
-            // If the row's text includes the search query, show it; otherwise, hide it
             if (rows[i].textContent.toLowerCase().includes(query)) {
                 rows[i].style.display = '';
             } else {
@@ -413,41 +390,3 @@ function searchTable() {
     </script>
   </body>
 </html>
-
-<!--
-<?php
-// Database connection
-$servername = "localhost";
-          $username = "root";
-          $password = "123456";
-          $dbname = "hmis";
-
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
-
-// Fetch users
-$sql = "SELECT id, username FROM user WHERE role = 'staff'";
-$result = $conn->query($sql);
-
-// Initialize users array
-$users = array();
-
-if ($result->num_rows > 0) {
-    // Output data of each row
-    while($row = $result->fetch_assoc()) {
-        $users[] = $row;
-    }
-} else {
-    echo "0 results";
-}
-
-$conn->close();
-
-// Return users as JSON
-echo json_encode($users);
-?>  

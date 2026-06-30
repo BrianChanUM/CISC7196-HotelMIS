@@ -2,6 +2,7 @@
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
+    require_once __DIR__ . '/config/session_check.php';
     require_once __DIR__ . '/config/language.php';
     $user = json_encode($_SESSION);
 ?>
@@ -183,42 +184,35 @@
 			<th onclick="sortTable(6)">Enquiry Modified Time</th>
           </tr>
           <?php
-          $servername = "localhost";
-          $username = "root";
-          $password = "123456";
-          $dbname = "hmis";
+          require_once __DIR__ . '/config/db_config.php';
 
-          // Create connection
-          $conn = new mysqli($servername, $username, $password, $dbname);
-
-          // Check connection
-          if ($conn->connect_error) {
-              die("Connection failed: " . $conn->connect_error);
-          }
+          $conn = getDBConnection();
 
           $sql = "SELECT * FROM enquiry";
-          $result = $conn->query($sql);
+          $stmt = $conn->prepare($sql);
+          $stmt->execute();
+          $result = $stmt->fetchAll();
 
-          if ($result->num_rows > 0) {
+          if (count($result) > 0) {
               // output data of each row
-              while($row = $result->fetch_assoc()) {
+              foreach($result as $row) {
                   echo "<tr>";
-				  echo "<td>" . $row["eID"] . "</td>";
-                  echo "<td>" . $row["eUser"] . "</td>";
-                  echo "<td>" . $row["eEmail"] . "</td>";
-                  echo "<td>" . $row["ePhone"] . "</td>";
-                  echo "<td>" . $row["eType"] . "</td>";
-                  echo "<td>" . $row["eContent"] . "</td>";
-                  echo "<td>" . $row["eCreatedDate"] . "</td>";
-				  echo "<td>" . $row["eStatus"] . "</td>";
-					echo "<td><button class='action-btn review' onclick='openModal(\"" . $row["eID"] . "\", \"" . $row["eUser"] . "\", \"" . $row["eEmail"] . "\", \"" . $row["ePhone"] . "\", \"" . $row["eType"] . "\", \"" . $row["eContent"] . "\", \"" . $row["eCreatedDate"] . "\", \"" . $row["eStatus"] . "\", \"" . $row["eModifiedDate"] . "\")'>Review</button></td>";
-				  echo "<td>" . $row["eModifiedDate"] . "</td>";
+                  echo "<td>" . htmlspecialchars($row["eID"]) . "</td>";
+                  echo "<td>" . htmlspecialchars($row["eUser"]) . "</td>";
+                  echo "<td>" . htmlspecialchars($row["eEmail"]) . "</td>";
+                  echo "<td>" . htmlspecialchars($row["ePhone"]) . "</td>";
+                  echo "<td>" . htmlspecialchars($row["eType"]) . "</td>";
+                  echo "<td>" . htmlspecialchars($row["eContent"]) . "</td>";
+                  echo "<td>" . htmlspecialchars($row["eCreatedDate"]) . "</td>";
+                  echo "<td>" . htmlspecialchars($row["eStatus"]) . "</td>";
+                  echo "<td><button class='action-btn review' onclick='openModal(\"" . htmlspecialchars($row["eID"]) . "\", \"" . htmlspecialchars($row["eUser"]) . "\", \"" . htmlspecialchars($row["eEmail"]) . "\", \"" . htmlspecialchars($row["ePhone"]) . "\", \"" . htmlspecialchars($row["eType"]) . "\", \"" . htmlspecialchars($row["eContent"]) . "\", \"" . htmlspecialchars($row["eCreatedDate"]) . "\", \"" . htmlspecialchars($row["eStatus"]) . "\", \"" . htmlspecialchars($row["eModifiedDate"]) . "\")'>Review</button></td>";
+                  echo "<td>" . htmlspecialchars($row["eModifiedDate"]) . "</td>";
                   echo "</tr>";
               }
           } else {
               echo "0 results";
           }
-          $conn->close();
+          closeDBConnection($conn);
           ?>
         </table>
       </div>

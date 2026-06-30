@@ -21,7 +21,7 @@ require_once __DIR__ . '/config/language.php';
         <div class="container">
             <div class="navbar-header">
                 <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
-                    <span class="sr-only">切换导航</span>
+                    <span class="sr-only">Toggle navigation</span>
                     <span class="icon-bar"></span>
                     <span class="icon-bar"></span>
                     <span class="icon-bar"></span>
@@ -61,23 +61,20 @@ require_once __DIR__ . '/config/language.php';
                         $email = $_POST['email'] ?? '';
                         
                         if (empty($email)) {
-                            $error = '请输入邮箱地址';
+                            $error = 'Please enter email address';
                         } else {
                             $stmt = $conn->prepare("SELECT UID, UserName, Email FROM user WHERE Email = ?");
-                            $stmt->bind_param("s", $email);
-                            $stmt->execute();
-                            $result = $stmt->get_result();
+                            $stmt->execute([$email]);
+                            $user = $stmt->fetch();
                             
-                            if ($result->num_rows > 0) {
-                                $user = $result->fetch_assoc();
-                                $message = '密码重置链接已发送到您的邮箱: ' . htmlspecialchars($email);
+                            if ($user) {
+                                $message = 'Password reset link has been sent to your email: ' . htmlspecialchars($email);
                             } else {
-                                $error = '该邮箱未注册';
+                                $error = 'This email is not registered';
                             }
-                            $stmt->close();
                         }
                     }
-                    $conn->close();
+                    closeDBConnection($conn);
                     ?>
                     
                     <?php if ($message): ?>
@@ -97,12 +94,12 @@ require_once __DIR__ . '/config/language.php';
                             <div class="col-md-12">
                                 <div class="form-group">
                                     <label for="email"><?php echo t('contact_email'); ?></label>
-                                    <input type="email" class="form-control" id="email" name="email" placeholder="请输入注册时的邮箱地址" required>
+                                    <input type="email" class="form-control" id="email" name="email" placeholder="Please enter your registered email address" required>
                                 </div>
                             </div>
                             <div class="col-md-12">
-                                <button type="submit" class="btn btn-primary">发送重置链接</button>
-                                <a href="login.php" class="btn btn-default">返回登录</a>
+                                <button type="submit" class="btn btn-primary">Send Reset Link</button>
+                                <a href="login.php" class="btn btn-default">Back to Login</a>
                             </div>
                         </div>
                     </form>

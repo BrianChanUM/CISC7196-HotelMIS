@@ -3,7 +3,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/language.php';
+require_once __DIR__ . '/config/db_config.php';
 
 function checkPermission($module, $permissionType) {
     if (!isset($_SESSION['permissions'])) {
@@ -29,77 +31,102 @@ if (!isset($_SESSION['username'])) {
     }
 }
 
-// Handle form submission first (before any HTML output)
 date_default_timezone_set('Asia/Shanghai');
-if ($_SERVER["REQUEST_METHOD"] == "POST" && !empty($_POST['email']) && !empty($_POST['booking_token']) && $_POST['booking_token'] === $_SESSION['booking_token']) {
-    $_SESSION['booking_token'] = md5(uniqid(rand(), true));
+
+// 处理支付成功回调
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['action'] == 'hotel_payment_return') {
+    require_once __DIR__ . '/config/db_config.php';
+    require_once __DIR__ . '/function/create_pending_order.php';
     
-    $servername = "localhost";
-    $username = "root";
-    $password = "123456";
-    $dbname = "hmis";
-
-    $conn = new mysqli($servername, $username, $password, $dbname);
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
-    }
-
+    $conn = getDBConnection();
+    $status = "TBC";
+    $ordercreateddate = date('Y-m-d H:i:s');
+    $ordermodifieddate = date('Y-m-d H:i:s');
+    $paymentStatus = 'Paid';
+    $paymentMethod = isset($_POST['payment_method']) ? $_POST['payment_method'] : 'Cash';
+    $paymentTime = date('Y-m-d H:i:s');
+    
     $checkInDate = $_POST['checkInDate'];
     $checkOutDate = $_POST['checkOutDate'];
     $hotelType = $_POST['hotel'];
     $time = $checkInDate . ' 14:00:00';
-    $ordertype = "Hotel";
     $email = $_POST['email'];
     $phone = preg_replace('/\D/', '', $_POST['phone']);
     $orderremark = $hotelType . ' | ' . $_POST['comment'] . ' | Check-out: ' . $checkOutDate;
-    $status = "TBC";
-    $ordercreateddate = date('Y-m-d H:i:s');
-    $ordermodifieddate = date('Y-m-d H:i:s');
     $noofguest = $_POST['guests'];
-    $isRequired = 0;
-    $assignedTo = '';
-
-    $checkStock = $conn->prepare("SELECT daily_quantity FROM hotelroomtype WHERE HotelRoomtype = ?");
-    $checkStock->bind_param("s", $hotelType);
-    $checkStock->execute();
-    $stockResult = $checkStock->get_result();
     
-    if ($stockResult->num_rows > 0) {
-        $stockRow = $stockResult->fetch_assoc();
-        $availableRooms = $stockRow['daily_quantity'];
-        
-        if ($availableRooms <= 0) {
-            $_SESSION['booking_error'] = "Sorry, no rooms available for " . $hotelType;
-            $checkStock->close();
-            $conn->close();
-            header("Location: bookedhotel.php?error=1");
-            exit();
-        }
-        
+    // 检查库存
+    $checkStock = $conn->prepare("SELECT daily_quantity FROM hotelroomtype WHERE HotelRoomtype = ?");
+    $checkStock->execute([$hotelType]);
+    $stockRow = $checkStock->fetch();
+    
+    if ($stockRow && $stockRow['daily_quantity'] > 0) {
         $deductStock = $conn->prepare("UPDATE hotelroomtype SET daily_quantity = daily_quantity - 1 WHERE HotelRoomtype = ? AND daily_quantity > 0");
-        $deductStock->bind_param("s", $hotelType);
-        $deductStock->execute();
-        $deductStock->close();
-    }
-    $checkStock->close();
-
-    $stmt = $conn->prepare("INSERT INTO orderbookings (OrderType, Time, ContactNo, Email, OrderRemark, Status, OrderCreatedDate, OrderModifiedDate, NoofGuest, isRequired, AssignedTo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssssssiis", $ordertype, $time, $phone, $email, $orderremark, $status, $ordercreateddate, $ordermodifieddate, $noofguest, $isRequired, $assignedTo);
-
-    if ($stmt->execute()) {
-        $last_id = $conn->insert_id;
-        $_SESSION['booking_success'] = "Your Hotel order ID is: Hotel " . $last_id;
-        $stmt->close();
-        $conn->close();
-        header("Location: bookedhotel.php?success=1");
-        exit();
+        $deductStock->execute([$hotelType]);
+        
+        $stmt = $conn->prepare("INSERT INTO orderbookings (OrderType, Time, ContactNo, Email, OrderRemark, Status, OrderCreatedDate, OrderModifiedDate, NoofGuest, isRequired, AssignedTo, PaymentStatus, PaymentMethod, PaymentTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute(['Hotel', $time, $phone, $email, $orderremark, $status, $ordercreateddate, $ordermodifieddate, $noofguest, 0, '', $paymentStatus, $paymentMethod, $paymentTime]);
+        
+        if ($stmt->rowCount() > 0) {
+            $last_id = $conn->lastInsertId();
+            $_SESSION['booking_success'] = "Your Hotel order ID is: Hotel " . $last_id;
+        }
     } else {
-        $stmt->close();
-        $conn->close();
+        $_SESSION['booking_error'] = "Sorry, no rooms available for " . htmlspecialchars($hotelType);
     }
+    
+    closeDBConnection($conn);
+    header("Location: bookedhotel.php?success=1");
+    exit();
 }
 
-// Generate a unique token for form submission
+// 创建待支付订单并跳转到支付页面
+if ($_SERVER["REQUEST_METHOD"] == "POST" && !empty($_POST['email']) && !empty($_POST['booking_token']) && $_POST['booking_token'] === $_SESSION['booking_token'] && !isset($_POST['action'])) {
+    $_SESSION['booking_token'] = md5(uniqid(rand(), true));
+    
+    require_once __DIR__ . '/function/create_pending_order.php';
+    
+    $checkInDate = $_POST['checkInDate'];
+    $checkOutDate = $_POST['checkOutDate'];
+    $hotelType = $_POST['hotel'];
+    $time = $checkInDate . ' 14:00:00';
+    // 如果用户已登录，使用session中的email，否则使用表单提交的email
+    $email = isset($_SESSION['email']) && !empty($_SESSION['email']) ? $_SESSION['email'] : $_POST['email'];
+    $phone = preg_replace('/\D/', '', $_POST['phone']);
+    $orderremark = $hotelType . ' | ' . $_POST['comment'] . ' | Check-out: ' . $checkOutDate;
+    $noofguest = $_POST['guests'];
+    
+    // 计算价格
+    $conn = getDBConnection();
+    $checkStock = $conn->prepare("SELECT daily_quantity, HotelRoomPrice FROM hotelroomtype WHERE HotelRoomtype = ?");
+    $checkStock->execute([$hotelType]);
+    $stockRow = $checkStock->fetch();
+    closeDBConnection($conn);
+    
+    if ($stockRow && $stockRow['daily_quantity'] <= 0) {
+        $_SESSION['booking_error'] = "Sorry, no rooms available for " . htmlspecialchars($hotelType);
+        header("Location: bookedhotel.php?error=1");
+        exit();
+    }
+    
+    $price = $stockRow && $stockRow['HotelRoomPrice'] ? floatval($stockRow['HotelRoomPrice']) : 0;
+    
+    // 创建待支付订单
+    createPendingOrder([
+        'OrderType' => 'Hotel',
+        'Time' => $time,
+        'ContactNo' => $phone,
+        'Email' => $email,
+        'OrderRemark' => $orderremark,
+        'NoofGuest' => $noofguest,
+        'Amount' => $price,
+        'hotel_type' => $hotelType
+    ]);
+    
+    header("Location: payment_simulation.php");
+    exit();
+}
+
 if (!isset($_SESSION['booking_token'])) {
     $_SESSION['booking_token'] = md5(uniqid(rand(), true));
 }
@@ -144,9 +171,7 @@ if (!isset($_SESSION['booking_token'])) {
     <style>
         .price-display {
             font-size: 2em;
-            /* Adjust as needed */
             color: #008CBA;
-            /* Adjust as needed */
         }
     </style>
 </head>
@@ -201,6 +226,7 @@ if (!isset($_SESSION['booking_token'])) {
         <div class="container">
             <div class="row">
                 <div class="col-md-6">
+
 
 
                     <div id="slideshow-wrap">
@@ -297,7 +323,13 @@ if (!isset($_SESSION['booking_token'])) {
                             <div class="col-md-12">
                                 <div class="form-group">
                                     <label for="email">Username/Email address</label>
-                                    <input type="text" class="form-control" id="email" name="email" placeholder="Username/Email" required>
+                                    <input type="text" class="form-control" id="email" name="email" 
+                                        <?php if (isset($_SESSION['email']) && !empty($_SESSION['email'])): ?>
+                                            value="<?php echo htmlspecialchars($_SESSION['email']); ?>" readonly
+                                        <?php else: ?>
+                                            placeholder="Username/Email"
+                                        <?php endif; ?>
+                                        required>
                                 </div>
                             </div>
                             <div class="col-md-12">
@@ -308,21 +340,11 @@ if (!isset($_SESSION['booking_token'])) {
                             </div>
 
                             <?php
-                            $servername = "localhost";
-                            $username = "root";
-                            $password = "123456";
-                            $dbname = "hmis";
-
-                            // Create connection
-                            $conn = new mysqli($servername, $username, $password, $dbname);
-
-                            // Check connection
-                            if ($conn->connect_error) {
-                                die("Connection failed: " . $conn->connect_error);
-                            }
-
+                            require_once __DIR__ . '/config/db_config.php';
+                            
+                            $conn = getDBConnection();
                             $sql = "SELECT HotelRoomtype, daily_quantity FROM hotelroomtype WHERE daily_quantity > 0";
-                            $result = $conn->query($sql);
+                            $stmt = $conn->query($sql);
                             ?>
 
                             <div class="col-md-12">
@@ -331,20 +353,21 @@ if (!isset($_SESSION['booking_token'])) {
                                     <select class="form-control" id="hotel" name="hotel" onchange="updateHotelInfo()">
                                         <option value="">Select a Room Type</option>
                                         <?php
-                                        if ($result->num_rows > 0) {
-                                            // output data of each row
-                                            while ($row = $result->fetch_assoc()) {
-                                                echo "<option value=\"" . $row["HotelRoomtype"] . "\" data-quantity=\"" . $row["daily_quantity"] . "\">" . $row["HotelRoomtype"] . " (Available: " . $row["daily_quantity"] . ")</option>";
-                                            }
-                                        } else {
-                                            echo "0 results";
+                                        while ($row = $stmt->fetch()) {
+                                            echo "<option value=\"" . htmlspecialchars($row["HotelRoomtype"]) . "\" data-quantity=\"" . htmlspecialchars($row["daily_quantity"]) . "\">" . htmlspecialchars($row["HotelRoomtype"]) . " (Available: " . htmlspecialchars($row["daily_quantity"]) . ")</option>";
                                         }
+                                        closeDBConnection($conn);
                                         ?>
                                     </select>
                                 </div>
                             </div>
                             <div class="col-md-12">
                                 <div id="hotelInfo" class="help-block" style="color: #666; font-size: 14px;"></div>
+                            </div>
+                            <div class="col-md-12">
+                                <div id="stockRefreshInfo" class="help-block" style="color: #008CBA; font-size: 12px; font-style: italic;">
+                                    Last refreshed: --
+                                </div>
                             </div>
                             <div class="col-md-12">
                                 <div class="form-group">
@@ -363,13 +386,8 @@ if (!isset($_SESSION['booking_token'])) {
                                 <div class="form-group">
                                     <label for="price">Price / Night</label>
                                     <p id="price" class="price-display">$0.00</p>
-
-
-
                                 </div>
                             </div>
-
-
 
                             <!-- Number of guests -->
                             <div class="col-md-12">
@@ -393,7 +411,7 @@ if (!isset($_SESSION['booking_token'])) {
                     <div id="myModal" class="modal">
                         <!-- Modal content -->
                         <div class="modal-content">
-                            <img src="img/hotel/logo.png" alt="Logo" style="width:100px; height:auto;"> <!-- Add this line -->
+                            <img src="img/hotel/logo.png" alt="Logo" style="width:100px; height:auto;">
                             <span class="close">&times;</span>
                             <p id="modalText">Your reservation is confirmed.</p>
                         </div>
@@ -426,11 +444,8 @@ if (!isset($_SESSION['booking_token'])) {
         const checkInDateInput = document.getElementById('checkInDate');
         const checkOutDateInput = document.getElementById('checkOutDate');
 
-        // Set minimum date for check-in
         checkInDateInput.setAttribute('min', today);
 
-
-        // Set minimum date for check-out (one day after check-in)
         checkInDateInput.addEventListener('change', () => {
             const checkInDate = new Date(checkInDateInput.value);
             const nextDay = new Date(checkInDate);
@@ -439,19 +454,13 @@ if (!isset($_SESSION['booking_token'])) {
             checkOutDateInput.setAttribute('min', formattedNextDay);
         });
 
-        // Get the modal
         var modal = document.getElementById("myModal");
-
-        // Get the <span> element that closes the modal
         var span = document.getElementsByClassName("close")[0];
 
-
-        // When the user clicks on <span> (x), close the modal
         span.onclick = function() {
             modal.style.display = "none";
         }
 
-        // When the user clicks anywhere outside of the modal, close it
         window.onclick = function(event) {
             if (event.target == modal) {
                 modal.style.display = "none";
@@ -463,6 +472,8 @@ if (!isset($_SESSION['booking_token'])) {
         const hotelSelect = document.getElementById('hotel');
         const priceDisplay = document.getElementById('price');
         const hotelInfo = document.getElementById('hotelInfo');
+        const stockRefreshInfo = document.getElementById('stockRefreshInfo');
+        let refreshInterval = null;
 
         function updateHotelInfo() {
             const selectedOption = hotelSelect.options[hotelSelect.selectedIndex];
@@ -474,9 +485,69 @@ if (!isset($_SESSION['booking_token'])) {
             }
         }
 
+        function refreshStock() {
+            $.ajax({
+                url: 'function/get_available_stock.php',
+                type: 'GET',
+                data: { action: 'get_stock' },
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) {
+                        updateRefreshTime(response.timestamp);
+                        updateStockOptions(response.hotel_stock);
+                    }
+                },
+                error: function() {
+                    console.error('Failed to refresh stock');
+                }
+            });
+        }
+
+        function updateRefreshTime(timestamp) {
+            stockRefreshInfo.textContent = 'Last refreshed: ' + timestamp + ' (UTC+8)';
+        }
+
+        function updateStockOptions(hotelStock) {
+            const options = hotelSelect.options;
+            let hasChanges = false;
+            
+            for (let i = 0; i < options.length; i++) {
+                const option = options[i];
+                if (option.value && hotelStock[option.value] !== undefined) {
+                    const oldQty = option.getAttribute('data-quantity');
+                    const newQty = hotelStock[option.value];
+                    
+                    if (oldQty !== newQty.toString()) {
+                        hasChanges = true;
+                        option.setAttribute('data-quantity', newQty);
+                        
+                        const textParts = option.text.split(' (');
+                        option.text = textParts[0] + ' (Available: ' + newQty + ')';
+                        
+                        if (newQty <= 0) {
+                            option.disabled = true;
+                            if (hotelSelect.value === option.value) {
+                                hotelSelect.selectedIndex = 0;
+                                updateHotelInfo();
+                                priceDisplay.textContent = '$0.00';
+                            }
+                        } else {
+                            option.disabled = false;
+                        }
+                    }
+                }
+            }
+            
+            if (hasChanges) {
+                hotelSelect.style.borderColor = '#dc3545';
+                setTimeout(() => {
+                    hotelSelect.style.borderColor = '#ced4da';
+                }, 1000);
+            }
+        }
+
         hotelSelect.addEventListener('change', () => {
             const selectedHotelRoomType = hotelSelect.value;
-            // Make an AJAX request to get the price
             fetch('function/get_price.php?roomType=' + selectedHotelRoomType)
                 .then(response => response.json())
                 .then(data => {
@@ -514,6 +585,15 @@ if (!isset($_SESSION['booking_token'])) {
         }
 
         updateSlideshowImages();
+
+        refreshStock();
+        refreshInterval = setInterval(refreshStock, 120000);
+
+        $(window).on('beforeunload', function() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
 
         $('#addToCartBtn').click(function() {
             var hotel = $('#hotel').val();

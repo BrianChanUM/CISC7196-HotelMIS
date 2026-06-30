@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/db_config.php';
 require_once __DIR__ . '/config/language.php';
 
@@ -19,41 +20,11 @@ $conn = getDBConnection();
     $sql4 = "SELECT OrderType, COUNT(*) as Total FROM orderbookings WHERE Status='Completed' GROUP BY OrderType";
     $result4 = $conn->query($sql4);
 
-    $data = array();
-    $tbcData = array();
-    $confirmedData = array();
-    $cancelledData = array();
-    $completedData = array();
-
-    if ($result->num_rows > 0) {
-        while($row = $result->fetch_assoc()) {
-            $data[] = $row;
-        }
-    }
-
-    if ($result1->num_rows > 0) {
-        while($row = $result1->fetch_assoc()) {
-            $tbcData[] = $row;
-        }
-    }
-
-    if ($result2->num_rows > 0) {
-        while($row = $result2->fetch_assoc()) {
-            $confirmedData[] = $row;
-        }
-    }
-
-    if ($result3->num_rows > 0) {
-        while($row = $result3->fetch_assoc()) {
-            $cancelledData[] = $row;
-        }
-    }
-
-    if ($result4->num_rows > 0) {
-        while($row = $result4->fetch_assoc()) {
-            $completedData[] = $row;
-        }
-    }
+    $data = $result->fetchAll(PDO::FETCH_ASSOC);
+    $tbcData = $result1->fetchAll(PDO::FETCH_ASSOC);
+    $confirmedData = $result2->fetchAll(PDO::FETCH_ASSOC);
+    $cancelledData = $result3->fetchAll(PDO::FETCH_ASSOC);
+    $completedData = $result4->fetchAll(PDO::FETCH_ASSOC);
 
     $json_data = json_encode($data);
     $json_tbc_data = json_encode($tbcData);
@@ -61,7 +32,7 @@ $conn = getDBConnection();
     $json_cancelled_data = json_encode($cancelledData);
     $json_completed_data = json_encode($completedData);
 
-    $conn->close();
+    closeDBConnection($conn);
 ?>
 
 

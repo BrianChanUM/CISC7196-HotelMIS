@@ -181,7 +181,7 @@ require_once __DIR__ . '/config/language.php';
                 <div class="col-sm-6 col-md-3 col-lg-3 branding">
                     <div class="portfolio-item">
                         <div class="hover-bg">
-                            <a href="#" Onclick="alert('The Room is now Reserved!.Welcome to Hillview Guest! An elegant place of serenity and tranquility.For Assistance to us on 07222222/ 07111111');">
+                            
                                 <div class="hover-text">
                                     <small>Air Conditioning</small>
 									
@@ -198,7 +198,7 @@ require_once __DIR__ . '/config/language.php';
                 <div class="col-sm-6 col-md-3 col-lg-3 photography app">
                     <div class="portfolio-item">
                         <div class="hover-bg">
-                            <a href="#" Onclick="alert('The Room is now Reserved!.Welcome to Hillview Guest! An elegant place of serenity and tranquility.For Assistance to us on 07222222/ 07111111');">
+                            
                                 <div class="hover-text">
                                     <small>Air Conditioning, LCD Screen</small>
 									
@@ -215,7 +215,7 @@ require_once __DIR__ . '/config/language.php';
 				<div class="col-sm-6 col-md-3 col-lg-3 photography">
                     <div class="portfolio-item">
                         <div class="hover-bg">
-                            <a href="#" Onclick="alert('The Room is now Reserved!.Welcome to Hillview Guest! An elegant place of serenity and tranquility.For Assistance to us on 07222222/ 07111111');">
+                            
                                 <div class="hover-text">
                                     <small>Air Conditioning, LCD Screen</small>
 									
@@ -232,7 +232,7 @@ require_once __DIR__ . '/config/language.php';
                 <div class="col-sm-6 col-md-3 col-lg-3 branding">
                     <div class="portfolio-item">
                         <div class="hover-bg">
-                            <a href="#" Onclick="alert('The Room is now Reserved!.Welcome to Hillview Guest! An elegant place of serenity and tranquility.For Assistance to us on 07222222/ 07111111');">
+                            
                                 <div class="hover-text">
                                     <small>Air Conditioning</small>
 									
@@ -249,7 +249,7 @@ require_once __DIR__ . '/config/language.php';
                 <div class="col-sm-6 col-md-3 col-lg-3 branding">
                     <div class="portfolio-item">
                         <div class="hover-bg">
-                            <a href="#" Onclick="alert('The Room is now Reserved!.Welcome to Hillview Guest! An elegant place of serenity and tranquility.For Assistance to us on 07222222/ 07111111');">
+                            
                                 <div class="hover-text">
                                     <small>Air Conditioning</small>
 									
@@ -284,7 +284,7 @@ require_once __DIR__ . '/config/language.php';
                 <div class="col-sm-6 col-md-3 col-lg-3 app">
                     <div class="portfolio-item">
                         <div class="hover-bg">
-                            <a href="#" Onclick="alert('The Room is now Reserved!.Welcome to Hillview Guest! An elegant place of serenity and tranquility.For Assistance to us on 07222222/ 07111111');">
+                            
                                 <div class="hover-text">
                                     <small>Air Conditioning, 2 Telephone Line</small>
 									
@@ -301,7 +301,7 @@ require_once __DIR__ . '/config/language.php';
                 <div class="col-sm-6 col-md-3 col-lg-3 photography">
                     <div class="portfolio-item">
                         <div class="hover-bg">
-                            <a href="#" Onclick="alert('The Room is now Reserved!.Welcome to Hillview Guest! An elegant place of serenity and tranquility.For Assistance to us on 07222222/ 07111111');">
+                            
                                 <div class="hover-text">
                                     <small>Air Conditioning, LCD Screen</small>
 									
@@ -318,7 +318,7 @@ require_once __DIR__ . '/config/language.php';
 				<div class="col-sm-6 col-md-3 col-lg-3 web">
                     <div class="portfolio-item">
                         <div class="hover-bg">
-                            <a href="#" Onclick="alert('The Room is now Reserved!.Welcome to Hillview Guest! An elegant place of serenity and tranquility.For Assistance to us on 07222222/ 07111111');">
+                            
                                 <div class="hover-text">
                                     <small>Air Conditioning, LCD Screen</small>
 									
@@ -335,7 +335,7 @@ require_once __DIR__ . '/config/language.php';
                 <div class="col-sm-6 col-md-3 col-lg-3 web">
                     <div class="portfolio-item">
                         <div class="hover-bg">
-                            <a href="#" Onclick="alert('The Room is now Reserved!.Welcome to Hillview Guest! An elegant place of serenity and tranquility.For Assistance to us on 07222222/ 07111111');">
+                            
                                 <div class="hover-text">
                                      <small>Air Conditioning, 2 Telephone Line, LCD Screen</small>
 									

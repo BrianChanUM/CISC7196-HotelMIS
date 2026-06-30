@@ -2,6 +2,7 @@
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
+    require_once __DIR__ . '/config/session_check.php';
     require_once __DIR__ . '/config/language.php';
     
     if (!isset($_SESSION["username"]) || empty($_SESSION["username"])) {
@@ -104,111 +105,143 @@
 
  
 <?php
-$servername = "localhost";
-$dbusername = "root";
-$dbpassword = "123456";
-$dbname = "hmis";
+require_once __DIR__ . '/config/db_config.php';
 
-// Create a connection
-$conn = new mysqli($servername, $dbusername, $dbpassword, $dbname);
+$conn = getDBConnection();
 
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+// Get user role
+$userRole = $_SESSION['role'] ?? '';
+$userEmail = $_SESSION['email'] ?? '';
+$username = $_SESSION['username'] ?? '';
+
+// If email is not set in session, try to get it from database
+if (empty($userEmail) && !empty($username)) {
+    $stmt = $conn->prepare("SELECT Email FROM user WHERE UserName = ? OR Email = ?");
+    $stmt->execute([$username, $username]);
+    $userRow = $stmt->fetch();
+    if ($userRow) {
+        $userEmail = $userRow['Email'];
+        $_SESSION['email'] = $userEmail; // Cache in session for future use
+    }
 }
 
-// Query to retrieve all orders
-$sql = "SELECT orderid, ordertype, OrderCreatedDate, email, contactno, OrderRemark, Status
-        FROM `orderbookings`
-        ORDER BY `OrderID` DESC";
+// Query to retrieve orders based on user role
+// if ($userRole == 'guest') {
+if(true){
+    // Guest users can only see their own orders
+    $sql = "SELECT orderid, ordertype, OrderCreatedDate, email, contactno, OrderRemark, Status
+            FROM `orderbookings`
+            WHERE email = ?
+            ORDER BY `OrderID` DESC";
+    $stmt = $conn->prepare($sql);
+    $stmt->execute([$userEmail]);
+} 
+// else {
+//     // Admin/manager can see all orders
+//     $sql = "SELECT orderid, ordertype, OrderCreatedDate, email, contactno, OrderRemark, Status
+//             FROM `orderbookings`
+//             ORDER BY `OrderID` DESC";
+//     $stmt = $conn->prepare($sql);
+//     $stmt->execute();
+// }
+$result = $stmt->fetchAll();
 
-$result = $conn->query($sql);
-
-// Check if the query was successful
-if ($result === false) {
-    die("Error executing query: " . $conn->error);
+// Fetch the count query result based on user role
+if ($userRole == 'guest') {
+    // Guest users can only see their own order statistics
+    $countSql = "SELECT ordertype, COUNT(*) AS order_count
+                 FROM `orderbookings`
+                 WHERE email = ?
+                 GROUP BY ordertype";
+    $stmt2 = $conn->prepare($countSql);
+    $stmt2->execute([$userEmail]);
+} else {
+    // Admin/manager can see all order statistics
+    $countSql = "SELECT ordertype, COUNT(*) AS order_count
+                 FROM `orderbookings`
+                 GROUP BY ordertype";
+    $stmt2 = $conn->prepare($countSql);
+    $stmt2->execute();
 }
-
-// Fetch the count query result
-$countSql = "SELECT ordertype, COUNT(*) AS order_count
-             FROM `orderbookings`
-             GROUP BY ordertype";
-
-$countResult = $conn->query($countSql);
-
-// Check if the count query was successful
-if ($countResult === false) {
-    die("Error executing count query: " . $conn->error);
-}
+$countResult = $stmt2->fetchAll();
 
 ?>
     <!-- New table for order type count -->
       <td colspan="7">
 <h3>Preference Type Count</h3>
                 <table class="dashboard">
-                   
-                    <?php
-                   $totalResult = $conn->query("SELECT COUNT(*) as total FROM orderbookings");
-$totalOrders = $totalResult ? $totalResult->fetch_assoc()['total'] : 100;
 
-while ($countRow = $countResult->fetch_assoc()) {
-					   
-					     $colors = [
+                    <?php
+                    // Get total orders count based on user role
+                    if ($userRole == 'guest') {
+                        $stmt3 = $conn->prepare("SELECT COUNT(*) as total FROM orderbookings WHERE email = ?");
+                        $stmt3->execute([$userEmail]);
+                    } else {
+                        $stmt3 = $conn->prepare("SELECT COUNT(*) as total FROM orderbookings");
+                        $stmt3->execute();
+                    }
+                    $totalRow = $stmt3->fetch();
+                    $totalOrders = $totalRow['total'] ?? 100;
+
+foreach ($countResult as $countRow) {
+
+                                         $colors = [
         'F&B' => '#ff8a80',
         'HOTEL' => '#64b5f6',
         'IRD' => '#81c784',
         'LIMO' => '#ffb74d',
     ];
-	$orderType = $countRow['ordertype'];
+   $orderType = $countRow['ordertype'];
     $widgetColor = isset($colors[$orderType]) ? $colors[$orderType] : '#6c63ff';
-	
-	$barWidth = $countRow['order_count'] * 10;
+
+   $barWidth = $countRow['order_count'] * 10;
     $orderCount = $countRow['order_count'];
     $percentage = ($orderCount / $totalOrders) * 100;
-	
-	
-	echo '<div class="widget" style="background-color: ' . $widgetColor . ';">';
-    echo '<h2>' . $orderType . '</h2>';
-	 echo '<div class="bar" style="width: ' . $barWidth . 'px;"></div>'; // Bar chart
-    echo '<p>Total: ' . $countRow['order_count'] . '</p>';
-	 echo '<div class="pie-chart" style="background: conic-gradient(' . $widgetColor . ' 0% ' . $percentage . '%, transparent ' . $percentage . '% 100%);"></div>'; // Pie chart
+
+
+   echo '<div class="widget" style="background-color: ' . htmlspecialchars($widgetColor) . ';">';
+    echo '<h2>' . htmlspecialchars($orderType) . '</h2>';
+    echo '<div class="bar" style="width: ' . intval($barWidth) . 'px;"></div>'; // Bar chart
+    echo '<p>Total: ' . intval($countRow['order_count']) . '</p>';
+    echo '<div class="pie-chart" style="background: conic-gradient(' . htmlspecialchars($widgetColor) . ' 0% ' . $percentage . '%, transparent ' . $percentage . '% 100%);"></div>'; // Pie chart
     echo '<p>' . round($percentage, 2) . '%</p>';
     echo '</div>';
-        
+
         // Add additional visual representation (e.g., bar chart, pie chart) here
-       
+
     }
                     ?>
                 </table>
-				
-				
-		<h4>Order Details</h4>
-		<table class="order-details">
-  <tr>
-            <th>Order ID</th>
-			<th>Order Type</th>
-			<th>Order Date</th>
-            <th>Email</th>
-			<th>Contact No</th>
-			<th>Remark</th>
-			<th>Status</th>
+
+
+           <h4>Order Details</h4>
+            <table class="order-details">
+   <tr>
+             <th>Order ID</th>
+                    <th>Order Type</th>
+                    <th>Order Date</th>
+             <th>Email</th>
+                    <th>Contact No</th>
+                    <th>Remark</th>
+                    <th>Status</th>
         </tr>
         <?php
-        if ($result->num_rows > 0) {
-            while ($row = $result->fetch_assoc()) {
+        if (count($result) > 0) {
+            foreach ($result as $row) {
               echo "<tr>";
-                echo "<td>" . $row["orderid"] . "</td>";
-				echo "<td>" . $row["ordertype"] . "</td>";
-                echo "<td>" . $row["OrderCreatedDate"] . "</td>";
-                echo "<td>" . $row["email"] . "</td>";
-				echo "<td>" . $row["contactno"] . "</td>";
-				echo "<td>" . ($row["OrderRemark"] ?? "N/A") . "</td>";
-				echo "<td>" . ($row["Status"] ?? "N/A") . "</td>";
+                echo "<td>" . htmlspecialchars($row["orderid"]) . "</td>";
+                            echo "<td>" . htmlspecialchars($row["ordertype"]) . "</td>";
+                echo "<td>" . htmlspecialchars($row["OrderCreatedDate"]) . "</td>";
+                echo "<td>" . htmlspecialchars($row["email"]) . "</td>";
+                            echo "<td>" . htmlspecialchars($row["contactno"]) . "</td>";
+                            echo "<td>" . htmlspecialchars($row["OrderRemark"] ?? "N/A") . "</td>";
+                            echo "<td>" . htmlspecialchars($row["Status"] ?? "N/A") . "</td>";
                 echo "</tr>";
             }
         } else {
             echo "<tr><td colspan='7'>No orders found.</td></tr>";
         }
+        closeDBConnection($conn);
         ?> 		
 				
 
@@ -326,7 +359,7 @@ paginate();
 		
 </script>
 
-<?php $conn->close(); ?>
+<?php $conn = null; ?>
 
   </body>
 </html>
