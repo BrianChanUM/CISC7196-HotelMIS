@@ -1,11 +1,85 @@
 <?php
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/config/session_check.php';
+require_once __DIR__ . '/config/language.php';
+require_once __DIR__ . '/function/check_permission.php';
+require_once __DIR__ . '/config/db_config.php';
+requireModulePermission('admin_job_assignment', 'index.php');
+$user = json_encode($_SESSION);
+
+$conn = getDBConnection();
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $orderId = isset($_POST["orderId"]) ? intval($_POST["orderId"]) : 0;
+    $status = isset($_POST["status"]) ? $_POST["status"] : '';
+
+    if ($orderId > 0 && !empty($status)) {
+        $getOrderStmt = $conn->prepare("SELECT OrderType, OrderRemark FROM orderbookings WHERE OrderID = ?");
+        $getOrderStmt->execute([$orderId]);
+        $orderRow = $getOrderStmt->fetch();
+        
+        if ($orderRow) {
+            $orderType = $orderRow['OrderType'];
+            $orderRemark = $orderRow['OrderRemark'];
+            
+            if ($status == 'Canceled') {
+                if ($orderType == 'Hotel') {
+                    preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                    if (isset($matches[1])) {
+                        $roomType = trim($matches[1]);
+                        $restoreStmt = $conn->prepare("UPDATE hotelroomtype SET daily_quantity = daily_quantity + 1 WHERE HotelRoomtype = ?");
+                        $restoreStmt->execute([$roomType]);
+                    }
+                } elseif ($orderType == 'Limo') {
+                    preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
+                    if (isset($matches[1])) {
+                        $vehicleType = trim($matches[1]);
+                        $restoreStmt = $conn->prepare("UPDATE hotelvehicletype SET daily_quantity = daily_quantity + 1 WHERE VehicleType = ?");
+                        $restoreStmt->execute([$vehicleType]);
+                    }
+                }
+            }
+        }
+
+        $updateStmt = $conn->prepare("UPDATE orderbookings SET Status = ?, OrderModifiedDate = NOW() WHERE OrderID = ?");
+        if ($updateStmt->execute([$status, $orderId])) {
+            echo "Status updated successfully";
+        } else {
+            echo "Error updating status";
+        }
     }
-    require_once __DIR__ . '/config/language.php';
-    require_once __DIR__ . '/function/check_permission.php';
-    requireModulePermission('admin_job_assignment', 'index.php');
-    $user = json_encode($_SESSION);
+}
+
+function getOrdersByStatus($status, $conn) {
+    if ($status === 'All') {
+        $stmt = $conn->prepare("SELECT * FROM orderbookings WHERE ordertype = 'Limo'");
+        $stmt->execute();
+    } else {
+        $stmt = $conn->prepare("SELECT * FROM orderbookings WHERE status = ? AND ordertype = 'Limo'");
+        $stmt->execute([$status]);
+    }
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getDrivers($conn) {
+    $stmt = $stmt = $conn->prepare("SELECT DriverID, DriverName, DriverStatus FROM hoteldriver where DriverStatus = 'available' or DriverStatus = 'busy'");
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getStatusLabel($status) {
+    $labels = [
+        'offline' => 'Offline',
+        'online' => 'Online',
+        'available' => 'Available',
+        'busy' => 'Busy'
+    ];
+    return isset($labels[$status]) ? $labels[$status] : $status;
+}
+
+$drivers = getDrivers($conn);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -50,6 +124,61 @@
     font-size: 14px;
     cursor: pointer; /* Add a pointer cursor on hover */
   }
+  
+  .complete-btn {
+    background-color: #ff9800; /* Orange */
+    border: none;
+    color: white;
+    padding: 10px 16px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    cursor: pointer;
+    margin-left: 5px;
+  }
+
+  .escalate-btn {
+    background-color: #dc3545; /* Red */
+    border: none;
+    color: white;
+    padding: 10px 16px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    cursor: pointer;
+    margin-left: 5px;
+  }
+
+  .escalate-btn:disabled {
+    background-color: #6c757d; /* Gray */
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .status-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+  }
+  .status-offline { background-color: #dc3545; color: white; }
+  .status-online { background-color: #17a2b8; color: white; }
+  .status-available { background-color: #28a745; color: white; }
+  .status-busy { background-color: #ffc107; color: #333; }
+  
+  .status-btn {
+      padding: 5px 10px;
+      margin: 2px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+  }
+  .status-online-btn { background-color: #17a2b8; color: white; }
+  .status-available-btn { background-color: #28a745; color: white; }
+  .status-offline-btn { background-color: #dc3545; color: white; }
 </style>
 	
     <link href='http://fonts.googleapis.com/css?family=Lato:100,300,400,700,900,100italic,300italic,400italic,700italic,900italic' rel='stylesheet' type='text/css'>
@@ -94,6 +223,7 @@
              <!--  <button class="tablinks" onclick="openTab(event, 'TBC')">TBC</button> -->
               <button class="tablinks" onclick="openTab(event, 'Confirmed')">Confirmed</button>
               <button class="tablinks" onclick="openTab(event, 'Rejected')">Rejected</button>
+              <button class="tablinks" onclick="openTab(event, 'DriverManagement')">Driver Mgmt</button>
 	  <button onclick="changePage(-1)">Previous</button>
             <button onclick="changePage(1)">Next</button>
 			
@@ -116,93 +246,31 @@
     <th>Action</th>
   </tr>
   <?php
-          $servername = "localhost";
-          $username = "root";
-          $password = "123456";
-          $dbname = "hmis";
-
-          // Create connection
-          $conn = new mysqli($servername, $username, $password, $dbname);
-
-          // Check connection
-          if ($conn->connect_error) {
-              die("Connection failed: " . $conn->connect_error);
-          }
-  $sql = "SELECT * FROM orderbookings where ordertype in ('IRD','Limo') ";
-  $result = $conn->query($sql);
-
-  if ($result->num_rows > 0) {
-      while($row = $result->fetch_assoc()) {
+  $orders = getOrdersByStatus('All', $conn);
+  if (!empty($orders)) {
+      foreach($orders as $row) {
           echo "<tr>";
-          echo "<td>" . $row["OrderID"] . "</td>";
-          echo "<td>" . $row["OrderType"] . "</td>";
-          echo "<td>" . $row["Time"] . "</td>";
-          echo "<td>" . $row["Email"] . "</td>";
-          echo "<td>" . $row["OrderRemark"] . "</td>";
-          echo "<td>" . $row["Status"] . "</td>";
-          echo "<td>" . $row["AssignedTo"] . "</td>";
-		  
-          echo "<td>" . $row["OrderModifiedDate"] . "</td>";
-          echo "<td><button class='action-btn review' onclick='openModal(\"" . $row["OrderID"] . "\", \"" . $row["OrderType"] . "\", \"" . $row["Time"] . "\", \"" . $row["Email"] . "\", \"" . $row["OrderRemark"] . "\", \"" . $row["Status"] . "\", \"" . $row["AssignedTo"] . "\", \"" . $row["OrderModifiedDate"] . "\")'>Review</button></td>";
-		  
+          echo "<td>" . htmlspecialchars($row["OrderID"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["OrderType"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["Time"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["Email"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["OrderRemark"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["Status"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["AssignedTo"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["OrderModifiedDate"]) . "</td>";
+          echo "<td><button class='action-btn review' onclick='openModal(\"" . htmlspecialchars($row["OrderID"]) . "\", \"" . htmlspecialchars($row["OrderType"]) . "\", \"" . htmlspecialchars($row["Time"]) . "\", \"" . htmlspecialchars($row["Email"]) . "\", \"" . htmlspecialchars($row["OrderRemark"]) . "\", \"" . htmlspecialchars($row["Status"]) . "\", \"" . htmlspecialchars($row["AssignedTo"]) . "\", \"" . htmlspecialchars($row["OrderModifiedDate"]) . "\")'>Review</button></td>";
           echo "</tr>";
       }
   } else {
-      echo "0 results";
+      echo "<tr><td colspan='9'>0 results</td></tr>";
   }
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $orderId = $_POST["orderId"];
-    $status = $_POST["status"];
-    $date = date('Y-m-d H:i:s');
-
-    $getOrderSql = "SELECT OrderType, OrderRemark FROM orderbookings WHERE OrderID = $orderId";
-    $orderResult = $conn->query($getOrderSql);
-    
-    if ($orderResult && $orderRow = $orderResult->fetch_assoc()) {
-        $orderType = $orderRow['OrderType'];
-        $orderRemark = $orderRow['OrderRemark'];
-        
-        if ($status == 'Canceled') {
-            if ($orderType == 'Hotel') {
-                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
-                if (isset($matches[1])) {
-                    $roomType = trim($matches[1]);
-                    $restoreSql = "UPDATE hotelroomtype SET daily_quantity = daily_quantity + 1 WHERE HotelRoomtype = ?";
-                    $restoreStmt = $conn->prepare($restoreSql);
-                    $restoreStmt->bind_param("s", $roomType);
-                    $restoreStmt->execute();
-                    $restoreStmt->close();
-                }
-            } elseif ($orderType == 'Limo') {
-                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
-                if (isset($matches[1])) {
-                    $vehicleType = trim($matches[1]);
-                    $restoreSql = "UPDATE hotelvehicletype SET daily_quantity = daily_quantity + 1 WHERE VehicleType = ?";
-                    $restoreStmt = $conn->prepare($restoreSql);
-                    $restoreStmt->bind_param("s", $vehicleType);
-                    $restoreStmt->execute();
-                    $restoreStmt->close();
-                }
-            }
-        }
-    }
-
-    $sql = "UPDATE orderbookings SET Status='$status', OrderModifiedDate=NOW() WHERE OrderID=$orderId";
-    if ($conn->query($sql) === TRUE) {
-        echo "Status updated successfully";
-    } else {
-        echo "Error updating status: " . $conn->error;
-    }
-}
-  $conn->close();
   ?>
 </table></div>
             
        
 			
 			
-			
+
             <div id="Confirmed" class="tabcontent">
               <h3>Confirmed</h3>
               <table id="confirmedTable">
@@ -216,114 +284,53 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <th onclick="sortTable(5)">Status</th>
                     <th onclick="sortTable(6)">Order Created Date</th>
                     <th onclick="sortTable(7)">Assign Duty to</th>
-					<th onclick="sortTable(8)">Order Modified Date</th> <!-- New column header -->
+					<th onclick="sortTable(8)">Order Modified Date</th>
                     <th>Action</th>
                   </tr>   
 				  
 	<?php
-          $servername = "localhost";
-          $username = "root";
-          $password = "123456";
-          $dbname = "hmis";
-
-          // Create connection
-          $conn = new mysqli($servername, $username, $password, $dbname);
-
-          // Check connection
-          if ($conn->connect_error) {
-              die("Connection failed: " . $conn->connect_error);
-          }
-  $sql = "SELECT * FROM orderbookings where status = 'Confirmed'";
-  $result = $conn->query($sql);
-  
-   // Fetch driver names
-  $sql = "SELECT DriverName FROM hoteldriver";
-  $driversResult = $conn->query($sql);
-  $drivers = [];
-  while($driver = $driversResult->fetch_assoc()) {
-      $drivers[] = $driver["DriverName"];
-  }
-
-  if ($result->num_rows > 0) {
-      while($row = $result->fetch_assoc()) {
+  $confirmedOrders = getOrdersByStatus('Confirmed', $conn);
+  if (!empty($confirmedOrders)) {
+      foreach($confirmedOrders as $row) {
           echo "<tr>";
-          echo "<td>" . $row["OrderID"] . "</td>";
-          echo "<td>" . $row["OrderType"] . "</td>";
-          echo "<td>" . $row["Time"] . "</td>";
-          echo "<td>" . $row["Email"] . "</td>";
-          echo "<td>" . $row["OrderRemark"] . "</td>";
-          echo "<td>" . $row["Status"] . "</td>";
-          echo "<td>" . $row["OrderCreatedDate"] . "</td>";
-		   echo "<td>";
-    echo "<select id='driverSelect_" . $row["OrderID"] . "' name='driver'>";
-	echo "<option value='None'>None</option>"; // Default "None" option
-    foreach($drivers as $driver) {
-        echo "<option value='" . $driver . "'";
-        if ($driver == $row["AssignedTo"]) {
-            echo " selected";
-        }
-        echo ">" . $driver . "</option>";
-    }
+          echo "<td>" . htmlspecialchars($row["OrderID"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["OrderType"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["Time"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["Email"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["OrderRemark"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["Status"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["OrderCreatedDate"]) . "</td>";
+          echo "<td>";
+          echo "<select id='driverSelect_" . htmlspecialchars($row["OrderID"]) . "' name='driverId'>";
+          echo "<option value='0'>None</option>";
+          foreach($drivers as $driver) {
+              $statusLabel = getStatusLabel($driver['DriverStatus']);
+              $disabled = ($driver['DriverStatus'] == 'offline' || $driver['DriverStatus'] == 'busy') ? 'disabled' : '';
+              echo "<option value='" . htmlspecialchars($driver['DriverID']) . "' " . $disabled;
+              if ($driver['DriverName'] == $row["AssignedTo"]) {
+                  echo " selected";
+              }
+              echo ">" . htmlspecialchars($driver['DriverName']) . " (" . $statusLabel . ")</option>";
+          }
           echo "</select>";
           echo "</td>";
-          echo "<td>" . $row["OrderModifiedDate"] . "</td>";
-         // echo "<td><button class='action-btn review' onclick='openModal(\"" . $row["OrderID"] . "\", \"" . $row["OrderType"] . "\", \"" . $row["Time"] . "\", \"" . $row["Email"] . "\", \"" . $row["OrderRemark"] . "\", \"" . $row["Status"] . "\", \"" . $row["OrderCreatedDate"] . "\", \"" . $row["OrderModifiedDate"] . "\")'>Review</button></td>";
-         echo "<td><button class='action-btn assign-btn' onclick='assignDriver(\"" . $row["OrderID"] . "\")'>Assign</button></td>";
-		 echo "</tr>";
+          echo "<td>" . htmlspecialchars($row["OrderModifiedDate"]) . "</td>";
+          echo "<td>";
+          echo "<button class='action-btn assign-btn' onclick='assignDriver(\"" . htmlspecialchars($row["OrderID"]) . "\")'>Assign</button>";
+          echo "<button class='action-btn auto-assign-btn' onclick='autoAssignDriver(\"" . htmlspecialchars($row["OrderID"]) . "\")'>Auto Assign</button>";
+          if ($row["AssignedTo"] != "None" && $row["AssignedTo"] != "") {
+              echo "<button class='action-btn complete-btn' onclick='completeOrder(\"" . htmlspecialchars($row["OrderID"]) . "\", \"" . htmlspecialchars($row["AssignedTo"]) . "\")'>Complete</button>";
+          }
+          $escalated = isset($row["escalated"]) ? intval($row["escalated"]) : 0;
+          $disabledAttr = $escalated == 1 ? 'disabled' : '';
+          $buttonText = $escalated == 1 ? 'Escalated ✓' : 'Escalate';
+          echo "<button class='action-btn escalate-btn' " . $disabledAttr . " onclick='escalateOrder(\"" . htmlspecialchars($row["OrderID"]) . "\")'>" . $buttonText . "</button>";
+          echo "</td>";
+          echo "</tr>";
       }
   } else {
-      echo "0 results";
+      echo "<tr><td colspan='10'>0 results</td></tr>";
   }
-  
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $orderId = $_POST["orderId"];
-    $status = $_POST["status"];
-    $date = date('Y-m-d H:i:s');
-
-    $getOrderSql = "SELECT OrderType, OrderRemark FROM orderbookings WHERE OrderID = $orderId";
-    $orderResult = $conn->query($getOrderSql);
-    
-    if ($orderResult && $orderRow = $orderResult->fetch_assoc()) {
-        $orderType = $orderRow['OrderType'];
-        $orderRemark = $orderRow['OrderRemark'];
-        
-        if ($status == 'Canceled') {
-            if ($orderType == 'Hotel') {
-                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
-                if (isset($matches[1])) {
-                    $roomType = trim($matches[1]);
-                    $restoreSql = "UPDATE hotelroomtype SET daily_quantity = daily_quantity + 1 WHERE HotelRoomtype = ?";
-                    $restoreStmt = $conn->prepare($restoreSql);
-                    $restoreStmt->bind_param("s", $roomType);
-                    $restoreStmt->execute();
-                    $restoreStmt->close();
-                }
-            } elseif ($orderType == 'Limo') {
-                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
-                if (isset($matches[1])) {
-                    $vehicleType = trim($matches[1]);
-                    $restoreSql = "UPDATE hotelvehicletype SET daily_quantity = daily_quantity + 1 WHERE VehicleType = ?";
-                    $restoreStmt = $conn->prepare($restoreSql);
-                    $restoreStmt->bind_param("s", $vehicleType);
-                    $restoreStmt->execute();
-                    $restoreStmt->close();
-                }
-            }
-        }
-    }
-
-   $sql = "UPDATE orderbookings SET Status='$status', OrderModifiedDate=NOW() WHERE OrderID=$orderId";
-
-
-    if ($conn->query($sql) === TRUE) {
-        echo "Status updated successfully";
-    } else {
-        echo "Error updating status: " . $conn->error;
-    }
-}
-  
-  
-  $conn->close();
   ?>
                 </table>
               </table>
@@ -343,91 +350,63 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <th onclick="sortTable(7)">Order Modified Date</th>
                     <th>Action</th>
                   </tr>   <?php
-
-          $servername = "localhost";
-          $username = "root";
-          $password = "123456";
-          $dbname = "hmis";
-
-          // Create connection
-          $conn = new mysqli($servername, $username, $password, $dbname);
-
-          // Check connection
-          if ($conn->connect_error) {
-              die("Connection failed: " . $conn->connect_error);
-          }
-  $sql = "SELECT * FROM orderbookings where status = 'Rejected'";
-  $result = $conn->query($sql);
-
-  if ($result->num_rows > 0) {
-      while($row = $result->fetch_assoc()) {
+  $rejectedOrders = getOrdersByStatus('Rejected', $conn);
+  if (!empty($rejectedOrders)) {
+      foreach($rejectedOrders as $row) {
           echo "<tr>";
-          echo "<td>" . $row["OrderID"] . "</td>";
-          echo "<td>" . $row["OrderType"] . "</td>";
-          echo "<td>" . $row["Time"] . "</td>";
-          echo "<td>" . $row["Email"] . "</td>";
-          echo "<td>" . $row["OrderRemark"] . "</td>";
-          echo "<td>" . $row["Status"] . "</td>";
-          echo "<td>" . $row["OrderCreatedDate"] . "</td>";
-          echo "<td>" . $row["OrderModifiedDate"] . "</td>";
-          echo "<td><button class='action-btn review' onclick='openModal(\"" . $row["OrderID"] . "\", \"" . $row["OrderType"] . "\", \"" . $row["Time"] . "\", \"" . $row["Email"] . "\", \"" . $row["OrderRemark"] . "\", \"" . $row["Status"] . "\", \"" . $row["OrderCreatedDate"] . "\", \"" . $row["OrderModifiedDate"] . "\")'>Review</button></td>";
+          echo "<td>" . htmlspecialchars($row["OrderID"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["OrderType"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["Time"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["Email"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["OrderRemark"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["Status"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["OrderCreatedDate"]) . "</td>";
+          echo "<td>" . htmlspecialchars($row["OrderModifiedDate"]) . "</td>";
+          echo "<td><button class='action-btn review' onclick='openModal(\"" . htmlspecialchars($row["OrderID"]) . "\", \"" . htmlspecialchars($row["OrderType"]) . "\", \"" . htmlspecialchars($row["Time"]) . "\", \"" . htmlspecialchars($row["Email"]) . "\", \"" . htmlspecialchars($row["OrderRemark"]) . "\", \"" . htmlspecialchars($row["Status"]) . "\", \"" . htmlspecialchars($row["OrderCreatedDate"]) . "\", \"" . htmlspecialchars($row["OrderModifiedDate"]) . "\")'>Review</button></td>";
           echo "</tr>";
       }
   } else {
-      echo "0 results";
+      echo "<tr><td colspan='9'>0 results</td></tr>";
   }
-  
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $orderId = $_POST["orderId"];
-    $status = $_POST["status"];
-    $date = date('Y-m-d H:i:s');
 
-    $getOrderSql = "SELECT OrderType, OrderRemark FROM orderbookings WHERE OrderID = $orderId";
-    $orderResult = $conn->query($getOrderSql);
-    
-    if ($orderResult && $orderRow = $orderResult->fetch_assoc()) {
-        $orderType = $orderRow['OrderType'];
-        $orderRemark = $orderRow['OrderRemark'];
-        
-        if ($status == 'Canceled') {
-            if ($orderType == 'Hotel') {
-                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
-                if (isset($matches[1])) {
-                    $roomType = trim($matches[1]);
-                    $restoreSql = "UPDATE hotelroomtype SET daily_quantity = daily_quantity + 1 WHERE HotelRoomtype = ?";
-                    $restoreStmt = $conn->prepare($restoreSql);
-                    $restoreStmt->bind_param("s", $roomType);
-                    $restoreStmt->execute();
-                    $restoreStmt->close();
-                }
-            } elseif ($orderType == 'Limo') {
-                preg_match('/^([A-Za-z0-9\s]+)\s\|/', $orderRemark, $matches);
-                if (isset($matches[1])) {
-                    $vehicleType = trim($matches[1]);
-                    $restoreSql = "UPDATE hotelvehicletype SET daily_quantity = daily_quantity + 1 WHERE VehicleType = ?";
-                    $restoreStmt = $conn->prepare($restoreSql);
-                    $restoreStmt->bind_param("s", $vehicleType);
-                    $restoreStmt->execute();
-                    $restoreStmt->close();
-                }
-            }
-        }
-    }
-
-    $sql = "UPDATE orderbookings SET Status='$status', OrderModifiedDate=NOW() WHERE OrderID=$orderId";
-
-
-    if ($conn->query($sql) === TRUE) {
-        echo "Status updated successfully";
-    } else {
-        echo "Error updating status: " . $conn->error;
-    }
-}
-  
-  
-  $conn->close();
+closeDBConnection($conn);
   ?>
                 </table>
+              </table>
+            </div>
+            
+            <div id="DriverManagement" class="tabcontent">
+              <h3>Driver Status Management</h3>
+              <table id="driverTable">
+                <tr>
+                    <th>Driver ID</th>
+                    <th>Driver Name</th>
+                    <th>Source</th>
+                    <th>Current Status</th>
+                    <th>Action</th>
+                </tr>
+                <?php
+                $conn = getDBConnection();
+                // 司机管理菜单：查询所有司机，无任何条件和排序
+                $driverStmt = $conn->prepare("SELECT * FROM hoteldriver");
+                $driverStmt->execute();
+                $allDrivers = $driverStmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                foreach($allDrivers as $driver) {
+                    echo "<tr>";
+                    echo "<td>" . htmlspecialchars($driver["DriverID"]) . "</td>";
+                    echo "<td>" . htmlspecialchars($driver["DriverName"]) . "</td>";
+                    echo "<td>" . htmlspecialchars($driver["DriverSource"]) . "</td>";
+                    echo "<td><span class='status-badge status-" . htmlspecialchars($driver["DriverStatus"]) . "'>" . getStatusLabel($driver["DriverStatus"]) . "</span></td>";
+                    echo "<td>";
+                    echo "<button class='status-btn status-online-btn' onclick='updateDriverStatus(" . $driver["DriverID"] . ", \"online\")'>Online</button>";
+                    echo "<button class='status-btn status-available-btn' onclick='updateDriverStatus(" . $driver["DriverID"] . ", \"available\")'>Available</button>";
+                    echo "<button class='status-btn status-offline-btn' onclick='updateDriverStatus(" . $driver["DriverID"] . ", \"offline\")'>Offline</button>";
+                    echo "</td>";
+                    echo "</tr>";
+                }
+                closeDBConnection($conn);
+                ?>
               </table>
             </div>
           </div>
@@ -448,12 +427,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
           </div>
         </div>
       </div>
-    </div>
-	
-	
-	
-      <?php include(__DIR__ . '/layout/footer.php');?>
-	  
+    </div>	
+      <?php include(__DIR__ . '/layout/footer.php');?>	  
     <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
     <script type="text/javascript" src="js/jquery.1.11.1.js"></script>
@@ -473,7 +448,7 @@ function openModal(orderId, time, places, eventType, contact, phone, email, stat
     var modal = document.getElementById("myModal");
     var modalText = document.getElementById("modalText");
     modalText.innerHTML = "<b>Order Details</b><br>Order ID: " + orderId + "<br>Order Type: " + time + "<br>Time: " + places + "<br>Email: " + eventType + "<br>Order Remark: " + contact + "<br>Last Status: " + phone + "<br>Assigned To: " + email + "<br>Modified Time: " + status;
-    modalText.dataset.orderId = orderId; // Set the orderId in a data attribute
+    modalText.dataset.orderId = orderId;
     modal.style.display = "block";
 }
       span.onclick = function() {
@@ -497,15 +472,12 @@ function openModal(orderId, time, places, eventType, contact, phone, email, stat
 
  function updateStatus(status) {
     var xhr = new XMLHttpRequest();
-    xhr.open("POST", "<?php echo $_SERVER['PHP_SELF']; ?>", true);
+    xhr.open("POST", "<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>", true);
     xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded"); 
     xhr.onreadystatechange = function() {
         if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
-            // Log the server response for debugging
             console.log('Server response:', this.responseText);
-            // Close the modal
             modal.style.display = "none";
-            // Refresh the page
             location.reload();
         }
     }
@@ -547,10 +519,10 @@ function openModal(orderId, time, places, eventType, contact, phone, email, stat
 });
 		
 		
-		
+
         var table = document.getElementById('orderbookings');
         var totalRows = table.rows.length - 1;
-        var limit = 10; // Number of rows per page
+        var limit = 10;
         var totalPages = Math.ceil(totalRows / limit);
         var currentPage = 1;
 
@@ -562,7 +534,6 @@ function openModal(orderId, time, places, eventType, contact, phone, email, stat
               table.rows[i].style.display = '';
             }
           }
-          // Update record number
           var startRecord = ((currentPage - 1) * limit) + 1;
           var endRecord = Math.min(currentPage * limit, totalRows);
           document.getElementById('recordNumber').innerText = 'Showing ' + startRecord + ' to ' + endRecord + ' of ' + totalRows;
@@ -570,7 +541,6 @@ function openModal(orderId, time, places, eventType, contact, phone, email, stat
 
         function changePage(delta) {
           currentPage += delta;
-          // Make sure currentPage is within valid range
           currentPage = Math.max(1, Math.min(currentPage, Math.ceil(totalRows / limit)));
           paginate();
         }
@@ -578,23 +548,124 @@ function openModal(orderId, time, places, eventType, contact, phone, email, stat
 
 		function assignDriver(orderId) {
     var driverSelect = document.getElementById("driverSelect_" + orderId);
-    var driver = driverSelect.options[driverSelect.selectedIndex].value;
-	if (driver === "None") {
+    var driverId = driverSelect.options[driverSelect.selectedIndex].value;
+    if (driverId === "0") {
         alert("Please select a driver");
         return;
     }
 
-    // Make an AJAX call to a PHP script to update the AssignedTo field
     var xhr = new XMLHttpRequest();
     xhr.open("POST", "function/assignDriver.php", true);
     xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
     xhr.onreadystatechange = function() {
         if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
-            alert("Driver assigned successfully");
-			location.reload(); // Refresh the page
+            var response = JSON.parse(this.responseText);
+            if (response.success) {
+                alert("Driver assigned successfully");
+                location.reload();
+            } else {
+                alert("Failed: " + response.message);
+            }
         }
     }
-    xhr.send("orderId=" + orderId + "&driver=" + driver);
+    xhr.send("orderId=" + orderId + "&driverId=" + encodeURIComponent(driverId));
+}
+
+function autoAssignDriver(orderId) {
+    var driverSelect = document.getElementById("driverSelect_" + orderId);
+    var driverId = driverSelect.options[driverSelect.selectedIndex].value;
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "function/getFirstAvailableDriver.php", true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    xhr.onreadystatechange = function() {
+        if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+            var response = JSON.parse(this.responseText);
+            if (response.success) {
+                var driverName = response.driverName;
+                if (confirm("Auto assign to driver: " + driverName + "?")) {
+                    // Set the dropdown to this driver and call assignDriver
+                    driverSelect.value = response.driverId;
+                    assignDriver(orderId);
+                }
+            } else {
+                alert("No available drivers at this time");
+            }
+        }
+    }
+    xhr.send();
+}
+
+function completeOrder(orderId, driverName) {
+    if (!confirm("Confirm to complete order " + orderId + "?\nDriver " + driverName + " will be set to Available.")) {
+        return;
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "function/completeOrder.php", true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    xhr.onreadystatechange = function() {
+        if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+            var response = JSON.parse(this.responseText);
+            if (response.success) {
+                alert("Order completed, driver status updated to Available");
+                location.reload();
+            } else {
+                alert("Failed: " + response.message);
+            }
+        }
+    }
+    xhr.send("orderId=" + orderId);
+}
+
+function escalateOrder(orderId) {
+    if (!confirm("Confirm to escalate order " + orderId + "?")) {
+        return;
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "function/escalateOrder.php", true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    xhr.onreadystatechange = function() {
+        if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+            var response = JSON.parse(this.responseText);
+            if (response.success) {
+                alert("Order escalated successfully");
+                location.reload();
+            } else {
+                alert("Failed: " + response.message);
+            }
+        }
+    }
+    xhr.send("orderId=" + orderId);
+}
+
+function updateDriverStatus(driverId, status) {
+    var statusLabels = {
+        'online': 'Online',
+        'available': 'Available',
+        'offline': 'Offline'
+    };
+    
+    if (!confirm("Confirm to set driver status to " + statusLabels[status] + "?")) {
+        return;
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "function/updateDriverStatus.php", true);
+    xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    xhr.onreadystatechange = function() {
+        if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+            var response = JSON.parse(this.responseText);
+            if (response.success) {
+                alert("Driver status updated");
+                location.reload();
+            } else {
+                alert("Update failed: " + response.message);
+            }
+        }
+    }
+    xhr.send("driverId=" + driverId + "&status=" + encodeURIComponent(status));
 }
 
         
