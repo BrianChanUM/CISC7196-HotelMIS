@@ -2,6 +2,7 @@
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
+    require_once __DIR__ . '/config/session_check.php';
     require_once __DIR__ . '/config/language.php';
     require_once __DIR__ . '/function/check_permission.php';
     requirePermission('admin_outlets', 'view', 'index.php');
@@ -21,13 +22,11 @@
             }
             $outletName = $_POST['outletName'];
             $stmt = $conn->prepare("DELETE FROM hoteloutlet WHERE OutletName = ?");
-            $stmt->bind_param("s", $outletName);
-            if ($stmt->execute()) {
+            if ($stmt->execute([$outletName])) {
                 echo json_encode(['success' => true, 'message' => 'Outlet deleted successfully']);
             } else {
                 echo json_encode(['success' => false, 'message' => 'Error deleting outlet']);
             }
-            $stmt->close();
             exit;
         }
         
@@ -45,28 +44,24 @@
             $status = $_POST['status'];
             
             $stmt = $conn->prepare("UPDATE hoteloutlet SET OutletName = ?, OutletSlogan = ?, OutletMenu = ?, `Opening Hour` = ?, Style = ?, Status = ? WHERE OutletName = ?");
-            $stmt->bind_param("sssssis", $outletName, $outletSlogan, $outletMenu, $openingHour, $style, $status, $oldOutletName);
-            if ($stmt->execute()) {
+            if ($stmt->execute([$outletName, $outletSlogan, $outletMenu, $openingHour, $style, $status, $oldOutletName])) {
                 echo json_encode(['success' => true, 'message' => 'Outlet updated successfully']);
             } else {
                 echo json_encode(['success' => false, 'message' => 'Error updating outlet']);
             }
-            $stmt->close();
             exit;
         }
         
         if ($_POST['action'] == 'get') {
             $outletName = $_POST['outletName'];
             $stmt = $conn->prepare("SELECT * FROM hoteloutlet WHERE OutletName = ?");
-            $stmt->bind_param("s", $outletName);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            if ($row = $result->fetch_assoc()) {
+            $stmt->execute([$outletName]);
+            $row = $stmt->fetch();
+            if ($row) {
                 echo json_encode(['success' => true, 'data' => $row]);
             } else {
                 echo json_encode(['success' => false, 'message' => 'Outlet not found']);
             }
-            $stmt->close();
             exit;
         }
     }
@@ -237,7 +232,7 @@ function openModal(orderId, OutletName, places, eventType, contact, phone, email
     modal.style.display = "block";
 }
 
-function openOutletModal(outletName, slogan, menu, openingHour, status, style) {
+function openOutletModal(outletName, slogan, menu, openingHour, capacity, status, style) {
     var modal = document.getElementById("myModal");
     var modalText = document.getElementById("modalText");
     var buttonContainer = document.getElementById("buttonContainer");
@@ -247,6 +242,7 @@ function openOutletModal(outletName, slogan, menu, openingHour, status, style) {
                           "<b>Slogan:</b> " + slogan + "<br><br>" +
                           "<b>Menu:</b> " + menu + "<br><br>" +
                           "<b>Opening Hour:</b> " + openingHour + "<br><br>" +
+                          "<b>Capacity:</b> " + capacity + "<br><br>" +
                           "<b>Style:</b> " + style + "<br><br>" +
                           "<b>Status:</b> " + statusText;
     buttonContainer.style.display = "none";

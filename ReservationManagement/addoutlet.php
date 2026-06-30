@@ -2,38 +2,67 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/language.php';
 require_once __DIR__ . '/function/check_permission.php';
+require_once __DIR__ . '/config/db_config.php';
+
 requirePermission('admin_outlets', 'create', 'index.php');
+
+$errorMessage = '';
+$successMessage = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $outletName = trim($_POST['OutletName']);
+    $outletStyle = $_POST['OutletStyle'];
+    $capacity = isset($_POST['capacity']) ? intval($_POST['capacity']) : 50;
+    $status = isset($_POST['status']) ? 1 : 0;
+
+    if (empty($outletName)) {
+        $errorMessage = "Outlet name is required.";
+    } else if ($outletStyle !== 'FnB' && $outletStyle !== 'IRD') {
+        $errorMessage = "Invalid outlet style. Please select either 'FnB' or 'IRD'.";
+    } else {
+        $conn = getDBConnection();
+        
+        $existingOutletQuery = $conn->prepare("SELECT OutletName FROM hoteloutlet WHERE OutletName = ?");
+        $existingOutletQuery->execute([$outletName]);
+        
+        if ($existingOutletQuery->rowCount() > 0) {
+            $errorMessage = "Outlet name '" . htmlspecialchars($outletName) . "' already exists. Please choose a different name.";
+        } else {
+            $insertQuery = $conn->prepare("INSERT INTO hoteloutlet (OutletName, Style, capacity, status) VALUES (?, ?, ?, ?)");
+            $insertQuery->execute([$outletName, $outletStyle, $capacity, $status]);
+            
+            if ($insertQuery->rowCount() > 0) {
+                $successMessage = "Outlet " . htmlspecialchars($outletName) . " has been created successfully!";
+            } else {
+                $errorMessage = "Error creating outlet.";
+            }
+        }
+        
+        closeDBConnection($conn);
+    }
+}
 ?><!DOCTYPE html>
 <html lang="en">
 
 <head>
-    <!-- Basic Page Needs
-    ================================================== -->
     <meta charset="utf-8">
-    <!--[if IE]><meta http-equiv="x-ua-compatible" content="IE=9" /><![endif]-->
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CISC7196-HotelMIS-2023OCT18</title>
 
-    <!-- Favicons
-    ================================================== -->
     <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon">
     <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
     <link rel="apple-touch-icon" sizes="72x72" href="img/apple-touch-icon-72x72.png">
     <link rel="apple-touch-icon" sizes="114x114" href="img/apple-touch-icon-114x114.png">
 
-    <!-- Bootstrap -->
     <link rel="stylesheet" type="text/css" href="css/bootstrap.css">
     <link rel="stylesheet" type="text/css" href="fonts/font-awesome/css/font-awesome.css">
 
-    <!-- Slider
-    ================================================== -->
     <link href="css/owl.carousel.css" rel="stylesheet" media="screen">
     <link href="css/owl.theme.css" rel="stylesheet" media="screen">
 
-    <!-- Stylesheet
-    ================================================== -->
     <link rel="stylesheet" type="text/css" href="css/style.css">
     <link rel="stylesheet" type="text/css" href="css/responsive.css">
 
@@ -42,16 +71,11 @@ requirePermission('admin_outlets', 'create', 'index.php');
 
     <script type="text/javascript" src="js/modernizr.custom.js"></script>
 
-
-
 </head>
 
 <body>
-    <!-- Navigation
-    ==========================================-->
     <nav id="tf-menu" class="navbar navbar-default navbar-fixed-top">
         <div class="container">
-            <!-- Brand and toggle get grouped for better mobile display -->
             <div class="navbar-header">
                 <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
                     <span class="sr-only">Toggle navigation</span>
@@ -62,7 +86,6 @@ requirePermission('admin_outlets', 'create', 'index.php');
                 <a class="navbar-brand" href="index.php"><?php echo t('hotel_management_system'); ?></a>
             </div>
 
-            <!-- Collect the nav links, forms, and other content for toggling -->
             <?php
             $user = json_encode($_SESSION);
             ?>
@@ -73,13 +96,10 @@ requirePermission('admin_outlets', 'create', 'index.php');
                 <?php include(__DIR__ . '/layout/language_switcher.php'); ?>
                 <?php include(__DIR__ . '/layout/navbar.php'); ?>
 
-
-            </div><!-- /.navbar-collapse -->
-        </div><!-- /.container-fluid -->
+            </div>
+        </div>
     </nav>
 
-    <!-- Home Page
-    ==========================================-->
     <div id="tf-home" class="text-center">
         <a href="#tf-contact"></a>
 
@@ -93,6 +113,13 @@ requirePermission('admin_outlets', 'create', 'index.php');
                         <h3>To Creat New Outlet Page</h3>
                         <div class="clearfix"></div>
                     </div>
+
+                    <?php if ($errorMessage): ?>
+                    <div class="alert alert-danger"><?php echo $errorMessage; ?></div>
+                    <?php endif; ?>
+                    <?php if ($successMessage): ?>
+                    <div class="alert alert-success"><?php echo $successMessage; ?></div>
+                    <?php endif; ?>
 
                     <form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
                         <div class="row">
@@ -132,7 +159,6 @@ requirePermission('admin_outlets', 'create', 'index.php');
 
                             <div class="col-md-12">
                                 <div class="form-group">
-                                    <!-- Add other relevant fields here -->
                                     <button type="submit" class="btn tf-btn btn-primary">Create Outlet</button>
                                 </div>
                             </div>
@@ -141,78 +167,19 @@ requirePermission('admin_outlets', 'create', 'index.php');
                 </div>
             </div>
         </div>
-
-
-
-
-
     </div>
     <?php include(__DIR__ . '/layout/footer.php'); ?>
 
-    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
     <script type="text/javascript" src="js/jquery.1.11.1.js"></script>
-    <!-- Include all compiled plugins (below), or include individual files as needed -->
     <script type="text/javascript" src="js/bootstrap.js"></script>
     <script type="text/javascript" src="js/SmoothScroll.js"></script>
     <script type="text/javascript" src="js/jquery.isotope.js"></script>
 
     <script src="js/owl.carousel.js"></script>
 
-    <!-- Javascripts
-    ================================================== -->
     <script type="text/javascript" src="js/main.js"></script>
 
 </body>
 
 </html>
-
-<?php
-// Set your connection variables
-$servername = "localhost";
-$username = "root";
-$password = "123456";
-$dbname = "hmis";
-
-// Create a connection
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check the connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Get form data
-    $outletName = $_POST['OutletName']; // Adjust field name as needed
-    $outletStyle = $_POST['OutletStyle']; // FnB or IRD
-    $capacity = isset($_POST['capacity']) ? intval($_POST['capacity']) : 50;
-    $status = isset($_POST['status']) ? 1 : 0;
-
-    // Validate outlet name (check if it already exists)
-    $existingOutletQuery = "SELECT OutletName FROM hoteloutlet WHERE OutletName = '$outletName'";
-    $result = $conn->query($existingOutletQuery);
-
-    if ($result->num_rows > 0) {
-        echo "Outlet name '$outletName' already exists. Please choose a different name.";
-    } else {
-        // Check if the outlet style is valid (FnB or IRD)
-        if ($outletStyle !== 'FnB' && $outletStyle !== 'IRD') {
-            echo "Invalid outlet style. Please select either 'FnB' or 'IRD'.";
-        } else {
-            // Insert into the appropriate table
-            $insertQuery = "INSERT INTO hoteloutlet (OutletName, Style, capacity, status)
-                            VALUES ('$outletName', '$outletStyle', $capacity, $status)";
-
-            if ($conn->query($insertQuery) === TRUE) {
-                echo "<script>alert('Outlet " . $outletName . " has been created successfully!');</script>";
-            } else {
-                echo "Error: " . $insertQuery . "<br>" . $conn->error;
-            }
-        }
-    }
-}
-
-// Close the connection
-$conn->close();
-?>

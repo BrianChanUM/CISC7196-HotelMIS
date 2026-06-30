@@ -2,6 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/language.php';
 require_once __DIR__ . '/function/check_permission.php';
 requirePermission('admin_rooms', 'view', 'index.php');
@@ -21,13 +22,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
         }
         $roomType = $_POST['roomType'];
         $stmt = $conn->prepare("DELETE FROM hotelroomtype WHERE HotelRoomtype = ?");
-        $stmt->bind_param("s", $roomType);
-        if ($stmt->execute()) {
+        if ($stmt->execute([$roomType])) {
             echo json_encode(['success' => true, 'message' => 'Room type deleted successfully']);
         } else {
             echo json_encode(['success' => false, 'message' => 'Error deleting room type']);
         }
-        $stmt->close();
         exit;
     }
     
@@ -43,28 +42,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
         $status = $_POST['status'];
         
         $stmt = $conn->prepare("UPDATE hotelroomtype SET HotelRoomtype = ?, HotelRoomPrice = ?, daily_quantity = ?, status = ? WHERE HotelRoomtype = ?");
-        $stmt->bind_param("siiss", $roomType, $roomPrice, $dailyQuantity, $status, $oldRoomType);
-        if ($stmt->execute()) {
+        if ($stmt->execute([$roomType, $roomPrice, $dailyQuantity, $status, $oldRoomType])) {
             echo json_encode(['success' => true, 'message' => 'Room type updated successfully']);
         } else {
             echo json_encode(['success' => false, 'message' => 'Error updating room type']);
         }
-        $stmt->close();
         exit;
     }
     
     if ($_POST['action'] == 'get') {
         $roomType = $_POST['roomType'];
         $stmt = $conn->prepare("SELECT * FROM hotelroomtype WHERE HotelRoomtype = ?");
-        $stmt->bind_param("s", $roomType);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($row = $result->fetch_assoc()) {
+        $stmt->execute([$roomType]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
             echo json_encode(['success' => true, 'data' => $row]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Room type not found']);
         }
-        $stmt->close();
         exit;
     }
 }
@@ -174,11 +169,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                         </thead>
                         <tbody>
                             <?php
-                            $sql = "SELECT * FROM hotelroomtype ORDER BY HotelRoomtype";
-                            $result = $conn->query($sql);
+                            $stmt = $conn->query("SELECT * FROM hotelroomtype ORDER BY HotelRoomtype");
+                            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             
-                            if ($result->num_rows > 0) {
-                                while($row = $result->fetch_assoc()) {
+                            if (!empty($rows)) {
+                                foreach($rows as $row) {
                                     $statusClass = $row['status'] ? 'status-enabled' : 'status-disabled';
                                     $statusText = $row['status'] ? 'Enabled' : 'Disabled';
                                     
@@ -218,11 +213,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                         </thead>
                         <tbody>
                             <?php
-                            $sql = "SELECT * FROM hotelroomtype WHERE status = 1 ORDER BY HotelRoomtype";
-                            $result = $conn->query($sql);
+                            $stmt = $conn->prepare("SELECT * FROM hotelroomtype WHERE status = 1 ORDER BY HotelRoomtype");
+                            $stmt->execute();
+                            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             
-                            if ($result->num_rows > 0) {
-                                while($row = $result->fetch_assoc()) {
+                            if (!empty($rows)) {
+                                foreach($rows as $row) {
                                     $statusClass = $row['status'] ? 'status-enabled' : 'status-disabled';
                                     $statusText = $row['status'] ? 'Enabled' : 'Disabled';
                                     
@@ -262,11 +258,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
                         </thead>
                         <tbody>
                             <?php
-                            $sql = "SELECT * FROM hotelroomtype WHERE status = 0 ORDER BY HotelRoomtype";
-                            $result = $conn->query($sql);
+                            $stmt = $conn->prepare("SELECT * FROM hotelroomtype WHERE status = 0 ORDER BY HotelRoomtype");
+                            $stmt->execute();
+                            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             
-                            if ($result->num_rows > 0) {
-                                while($row = $result->fetch_assoc()) {
+                            if (!empty($rows)) {
+                                foreach($rows as $row) {
                                     $statusClass = $row['status'] ? 'status-enabled' : 'status-disabled';
                                     $statusText = $row['status'] ? 'Enabled' : 'Disabled';
                                     
@@ -453,9 +450,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
     }
     </script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
-    <script type="text/javascript" src="js/bootstrap.js"></script>
+<script type="text/javascript" src="js/bootstrap.js"></script>
 </body>
 </html>
 <?php
-$conn->close();
+closeDBConnection($conn);
 ?>
