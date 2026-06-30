@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/config/session_check.php';
 require_once __DIR__ . '/config/db_config.php';
 require_once __DIR__ . '/config/language.php';
 require_once __DIR__ . '/function/check_permission.php';
@@ -14,78 +15,84 @@ $outletName = isset($_POST['outlet_name']) ? $_POST['outlet_name'] : '';
 $outlets = [];
 $sql = "SELECT DISTINCT OutletName, Style FROM hoteloutlet";
 $result = $conn->query($sql);
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $outlets[] = ['name' => $row['OutletName'], 'type' => $row['Style']];
-    }
+while ($row = $result->fetch()) {
+    $outlets[] = ['name' => $row['OutletName'], 'type' => $row['Style']];
 }
 
 $chartData = [];
 $labels = [];
 $outletStats = [];
-$query = "";
 
+$params = [];
 if ($reportType === 'monthly') {
     $query = "SELECT MONTH(Time) as month, COUNT(*) as total 
               FROM orderbookings 
               WHERE OrderType = 'Dining' 
               AND YEAR(Time) = YEAR(CURDATE())";
     if ($outletName) {
-        $query .= " AND OrderRemark LIKE '%$outletName%'";
+        $query .= " AND OrderRemark LIKE ?";
+        $params[] = "%$outletName%";
     }
     $query .= " GROUP BY MONTH(Time) ORDER BY month";
 } elseif ($reportType === 'daily') {
     $query = "SELECT DATE(Time) as date, COUNT(*) as total 
               FROM orderbookings 
               WHERE OrderType = 'Dining' 
-              AND Time BETWEEN '$startDate' AND '$endDate'";
+              AND Time BETWEEN ? AND ?";
+    $params[] = $startDate;
+    $params[] = $endDate;
     if ($outletName) {
-        $query .= " AND OrderRemark LIKE '%$outletName%'";
+        $query .= " AND OrderRemark LIKE ?";
+        $params[] = "%$outletName%";
     }
     $query .= " GROUP BY DATE(Time) ORDER BY date";
 } else {
     $query = "SELECT DATE(Time) as date, COUNT(*) as total 
               FROM orderbookings 
               WHERE OrderType = 'Dining' 
-              AND Time BETWEEN '$startDate' AND '$endDate'";
+              AND Time BETWEEN ? AND ?";
+    $params[] = $startDate;
+    $params[] = $endDate;
     if ($outletName) {
-        $query .= " AND OrderRemark LIKE '%$outletName%'";
+        $query .= " AND OrderRemark LIKE ?";
+        $params[] = "%$outletName%";
     }
     $query .= " GROUP BY DATE(Time) ORDER BY date";
 }
 
-$result = $conn->query($query);
+$stmt = $conn->prepare($query);
+$stmt->execute($params);
 $totalOrders = 0;
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        if ($reportType === 'monthly') {
-            $labels[] = date('F', mktime(0, 0, 0, $row['month'], 1));
-        } else {
-            $labels[] = $row['date'];
-        }
-        $chartData[] = $row['total'];
-        $totalOrders += $row['total'];
+while ($row = $stmt->fetch()) {
+    if ($reportType === 'monthly') {
+        $labels[] = date('F', mktime(0, 0, 0, $row['month'], 1));
+    } else {
+        $labels[] = $row['date'];
     }
+    $chartData[] = $row['total'];
+    $totalOrders += $row['total'];
 }
 
+$outletParams = [];
 $outletQuery = "SELECT o.OutletName, o.Style, COUNT(ob.OrderID) as OrderCount
                 FROM hoteloutlet o
                 LEFT JOIN orderbookings ob ON ob.OrderRemark LIKE CONCAT('%', o.OutletName, '%')
                 WHERE ob.OrderType IN ('Dining', 'F&B')";
 if ($startDate && $endDate) {
-    $outletQuery .= " AND ob.Time BETWEEN '$startDate' AND '$endDate'";
+    $outletQuery .= " AND ob.Time BETWEEN ? AND ?";
+    $outletParams[] = $startDate;
+    $outletParams[] = $endDate;
 }
 $outletQuery .= " GROUP BY o.OutletName, o.Style ORDER BY OrderCount DESC";
 
-$outletResult = $conn->query($outletQuery);
-if ($outletResult->num_rows > 0) {
-    while ($row = $outletResult->fetch_assoc()) {
-        $outletStats[] = [
-            'name' => $row['OutletName'],
-            'type' => $row['Style'],
-            'count' => $row['OrderCount']
-        ];
-    }
+$outletStmt = $conn->prepare($outletQuery);
+$outletStmt->execute($outletParams);
+while ($row = $outletStmt->fetch()) {
+    $outletStats[] = [
+        'name' => $row['OutletName'],
+        'type' => $row['Style'],
+        'count' => $row['OrderCount']
+    ];
 }
 
 $avgOrdersPerDay = 0;
@@ -94,7 +101,7 @@ if ($reportType !== 'monthly' && $totalOrders > 0) {
     $avgOrdersPerDay = round($totalOrders / $days, 1);
 }
 
-$conn->close();
+closeDBConnection($conn);
 ?>
 
 <!DOCTYPE html>
